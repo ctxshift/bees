@@ -3,6 +3,7 @@ const clap = @import("clap");
 const store_mod = @import("../db/store.zig");
 const io = @import("../io.zig");
 const root = @import("../main.zig");
+const colors = @import("../colors.zig");
 
 pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
     const params = comptime clap.parseParamsComptime(
@@ -56,7 +57,23 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             return;
         }
 
-        for (issues) |issue| {
+        const use_color = colors.shouldUseColor();
+
+        if (use_color) {
+            try stdout.print("\n{s}\xf0\x9f\x93\x8b{s} Ready work ({d} issue{s} with no blockers):\n\n", .{
+                colors.header,
+                colors.reset,
+                issues.len,
+                if (issues.len != 1) @as([]const u8, "s") else "",
+            });
+        } else {
+            try stdout.print("\nReady work ({d} issue{s} with no blockers):\n\n", .{
+                issues.len,
+                if (issues.len != 1) @as([]const u8, "s") else "",
+            });
+        }
+
+        for (issues, 1..) |issue, i| {
             const priority_str: []const u8 = switch (issue.priority) {
                 1 => "P1",
                 2 => "P2",
@@ -64,13 +81,29 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
                 4 => "P4",
                 else => "P?",
             };
-            try stdout.print("{s:<12} {s:<3} {s:<8} {s}\n", .{
-                issue.id,
-                priority_str,
-                issue.issue_type,
-                issue.title,
-            });
+            if (use_color) {
+                const pcolor = colors.priorityColor(issue.priority);
+                const tcolor = colors.typeColor(issue.issue_type);
+                try stdout.print("{d}. [{s}\xe2\x97\x8f {s}{s}] [{s}{s}{s}] {s}: {s}\n", .{
+                    i,
+                    pcolor,
+                    priority_str,
+                    colors.reset,
+                    tcolor,
+                    issue.issue_type,
+                    colors.reset,
+                    issue.id,
+                    issue.title,
+                });
+            } else {
+                try stdout.print("{d}. [{s}] [{s}] {s}: {s}\n", .{
+                    i,
+                    priority_str,
+                    issue.issue_type,
+                    issue.id,
+                    issue.title,
+                });
+            }
         }
-        try stdout.print("\n{d} ready issue(s)\n", .{issues.len});
     }
 }

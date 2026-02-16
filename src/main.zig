@@ -43,7 +43,7 @@ pub fn openDb(allocator: std.mem.Allocator) !sqlite.Database {
     return db;
 }
 
-fn findBeesDir(allocator: std.mem.Allocator) ![]const u8 {
+pub fn findBeesDir(allocator: std.mem.Allocator) ![]const u8 {
     var cwd_buf: [std.fs.max_path_bytes]u8 = undefined;
     var dir_path: []const u8 = try std.fs.cwd().realpath(".", &cwd_buf);
 
@@ -66,7 +66,11 @@ fn findBeesDir(allocator: std.mem.Allocator) ![]const u8 {
     }
 }
 
-pub fn main() !void {
+pub fn main() void {
+    run() catch std.process.exit(1);
+}
+
+fn run() !void {
     var gpa_state = std.heap.DebugAllocator(.{}){};
     const allocator = gpa_state.allocator();
     defer _ = gpa_state.deinit();
@@ -149,4 +153,6 @@ test {
     _ = @import("timestamp.zig");
     _ = @import("id.zig");
     _ = @import("db/store_test.zig");
+    _ = @import("rpc/mutations.zig");
+    _ = @import("rpc/protocol.zig");
 }

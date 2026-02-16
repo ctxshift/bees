@@ -54,6 +54,11 @@ pub fn run(allocator: std.mem.Allocator) !void {
     // Create .beads symlink
     symlink.ensureBeadsSymlinkAtPath(".") catch {};
 
+    // Create beads.db -> bees.db symlink (for vscode-beads extension compatibility)
+    bees_dir.symLink("bees.db", "beads.db", .{}) catch |err| {
+        if (err != error.PathAlreadyExists) return err;
+    };
+
     // Create empty issues.jsonl
     const jsonl_file = try bees_dir.createFile("issues.jsonl", .{ .exclusive = true });
     jsonl_file.close();

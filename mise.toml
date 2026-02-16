@@ -8,7 +8,10 @@ run = "zig build"
 [tasks.install]
 description = "Build and install bees to ~/.local/bin"
 depends = ["build"]
-run = "cp zig-out/bin/bees ~/.local/bin/"
+run = """
+cp zig-out/bin/bees ~/.local/bin/
+ln -sf bees ~/.local/bin/bd
+"""
 
 [tasks.test]
 description = "Run all tests"
