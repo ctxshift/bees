@@ -1,0 +1,15 @@
+[tools]
+zig = "0.15.2"
+
+[tasks.build]
+description = "Build bees"
+run = "zig build"
+
+[tasks.install]
+description = "Build and install bees to ~/.local/bin"
+depends = ["build"]
+run = "cp zig-out/bin/bees ~/.local/bin/"
+
+[tasks.test]
+description = "Run all tests"
+run = "zig build test"
