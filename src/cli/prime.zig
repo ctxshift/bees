@@ -1,7 +1,5 @@
 const std = @import("std");
 const clap = @import("clap");
-const store_mod = @import("../db/store.zig");
-const root = @import("../main.zig");
 
 pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
     const params = comptime clap.parseParamsComptime(
@@ -21,38 +19,71 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
     if (res.args.help != 0) {
         const stderr = std.fs.File.stderr().deprecatedWriter();
-        try stderr.writeAll("Usage: bees prime\n\nDumps all open issues as context for AI agents.\n");
+        try stderr.writeAll("Usage: bees prime\n\nDumps workflow context for AI agents.\n");
         return;
-    }
-
-    var db = try root.openDb(allocator);
-    defer db.close();
-
-    var store = store_mod.Store.init(db);
-
-    // Get all open issues
-    const issues = try store.listIssues(allocator, .{ .status = "open" });
-    defer {
-        for (issues) |*issue| issue.deinit(allocator);
-        allocator.free(issues);
     }
 
     const stdout = std.fs.File.stdout().deprecatedWriter();
 
-    try stdout.writeAll("# Project Issues\n\n");
-
-    if (issues.len == 0) {
-        try stdout.writeAll("No open issues.\n");
-        return;
-    }
-
-    for (issues) |issue| {
-        try stdout.print("## {s}: {s}\n", .{ issue.id, issue.title });
-        try stdout.print("- Status: {s}\n", .{issue.status});
-        try stdout.print("- Priority: {d}\n", .{issue.priority});
-        try stdout.print("- Type: {s}\n", .{issue.issue_type});
-        if (issue.assignee) |v| try stdout.print("- Assignee: {s}\n", .{v});
-        if (issue.description) |v| try stdout.print("- Description: {s}\n", .{v});
-        try stdout.writeByte('\n');
-    }
+    try stdout.writeAll(
+        \\# Bees Workflow Context
+        \\
+        \\> **Context Recovery**: Run `bees prime` after compaction, clear, or new session
+        \\
+        \\## Core Rules
+        \\- **Default**: Use bees for ALL task tracking (`bees create`, `bees ready`, `bees close`)
+        \\- **Prohibited**: Do NOT use TodoWrite, TaskCreate, or markdown files for task tracking
+        \\- **Workflow**: Create bees issue BEFORE writing code, mark in_progress when starting
+        \\- Check `bees ready` for available work at start of session
+        \\
+        \\## Essential Commands
+        \\
+        \\### Finding Work
+        \\- `bees ready` - Show issues ready to work (no blockers)
+        \\- `bees list` or `bees ls` - All open issues
+        \\- `bees list --status=in_progress` - Active work
+        \\- `bees show <id>` - Detailed issue view with dependencies
+        \\
+        \\### Creating & Updating
+        \\- `bees create "<title>" -t task|bug|feature|epic|chore` - New issue
+        \\  - Priority: `-p 1` through `-p 4` (1=critical, 2=medium, 4=backlog)
+        \\- `bees update <id> --status in_progress` - Claim work
+        \\- `bees update <id> --assignee username` - Assign to someone
+        \\- `bees close <id>` - Mark complete
+        \\- `bees close <id> --reason "explanation"` - Close with reason
+        \\
+        \\### Dependencies
+        \\- `bees dep add <issue> <depends-on>` - Add dependency
+        \\- `bees show <id>` - See what's blocking/blocked by this issue
+        \\
+        \\### Labels & Comments
+        \\- `bees label add <id> <label>` - Add a label
+        \\- `bees label remove <id> <label>` - Remove a label
+        \\
+        \\### Project Health
+        \\- `bees ready` - Issues with no blockers
+        \\- `bees list` - All open issues with status
+        \\
+        \\## Common Workflows
+        \\
+        \\**Starting work:**
+        \\```bash
+        \\bees ready                              # Find available work
+        \\bees show <id>                          # Review issue details
+        \\bees update <id> --status in_progress   # Claim it
+        \\```
+        \\
+        \\**Completing work:**
+        \\```bash
+        \\bees close <id>                         # Mark complete
+        \\```
+        \\
+        \\**Creating dependent work:**
+        \\```bash
+        \\bees create "Implement feature X" -t feature
+        \\bees create "Write tests for X" -t task
+        \\bees dep add <test-id> <feature-id>     # Tests depend on feature
+        \\```
+        \\
+    );
 }
