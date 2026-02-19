@@ -58,6 +58,12 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         allocator.free(deps);
     }
 
+    const dependents = try store.listDependents(allocator, issue_id);
+    defer {
+        for (dependents) |*d| d.deinit(allocator);
+        allocator.free(dependents);
+    }
+
     const comments = try store.listComments(allocator, issue_id);
     defer {
         for (comments) |*c| c.deinit(allocator);
@@ -107,6 +113,42 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             try stdout.writeAll("Depends on:\n");
             for (deps) |dep| {
                 try stdout.print("  {s} ({s})\n", .{ dep.depends_on_id, dep.dep_type });
+            }
+        }
+
+        if (dependents.len > 0) {
+            // Group by dep_type for clearer display
+            var has_children = false;
+            var has_blocks = false;
+            var has_related = false;
+            for (dependents) |dep| {
+                if (std.mem.eql(u8, dep.dep_type, "parent-child")) has_children = true;
+                if (std.mem.eql(u8, dep.dep_type, "blocks")) has_blocks = true;
+                if (std.mem.eql(u8, dep.dep_type, "related")) has_related = true;
+            }
+            if (has_children) {
+                try stdout.writeAll("Children:\n");
+                for (dependents) |dep| {
+                    if (std.mem.eql(u8, dep.dep_type, "parent-child")) {
+                        try stdout.print("  {s}\n", .{dep.issue_id});
+                    }
+                }
+            }
+            if (has_blocks) {
+                try stdout.writeAll("Blocks:\n");
+                for (dependents) |dep| {
+                    if (std.mem.eql(u8, dep.dep_type, "blocks")) {
+                        try stdout.print("  {s}\n", .{dep.issue_id});
+                    }
+                }
+            }
+            if (has_related) {
+                try stdout.writeAll("Related:\n");
+                for (dependents) |dep| {
+                    if (std.mem.eql(u8, dep.dep_type, "related")) {
+                        try stdout.print("  {s}\n", .{dep.issue_id});
+                    }
+                }
             }
         }
 

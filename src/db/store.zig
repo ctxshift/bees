@@ -421,6 +421,34 @@ pub const Store = struct {
         return results.toOwnedSlice(allocator);
     }
 
+    /// Returns reverse dependencies: issues that depend on the given issue, with full dep info.
+    pub fn listDependents(self: *Store, allocator: std.mem.Allocator, issue_id: []const u8) ![]DependentResult {
+        var results = std.ArrayList(DependentResult){};
+        errdefer {
+            for (results.items) |*item| item.deinit(allocator);
+            results.deinit(allocator);
+        }
+
+        const stmt = try self.db.prepare(
+            struct { depends_on_id: sqlite.Text },
+            struct { issue_id: sqlite.Text, dep_type: sqlite.Text, created_at: sqlite.Text },
+            "SELECT issue_id, dep_type, created_at FROM dependencies WHERE depends_on_id = :depends_on_id",
+        );
+        defer stmt.finalize();
+        stmt.bind(.{ .depends_on_id = sqlite.text(issue_id) }) catch return results.toOwnedSlice(allocator);
+
+        while (true) {
+            const row = (try stmt.step()) orelse break;
+            try results.append(allocator, .{
+                .issue_id = try allocator.dupe(u8, row.issue_id.data),
+                .dep_type = try allocator.dupe(u8, row.dep_type.data),
+                .created_at = try allocator.dupe(u8, row.created_at.data),
+            });
+        }
+
+        return results.toOwnedSlice(allocator);
+    }
+
     // --- Labels ---
 
     pub fn addLabel(self: *Store, issue_id: []const u8, label: []const u8, created_at: []const u8) !void {
@@ -814,6 +842,18 @@ pub const DepResult = struct {
 
     pub fn deinit(self: *const DepResult, allocator: std.mem.Allocator) void {
         allocator.free(self.depends_on_id);
+        allocator.free(self.dep_type);
+        allocator.free(self.created_at);
+    }
+};
+
+pub const DependentResult = struct {
+    issue_id: []const u8,
+    dep_type: []const u8,
+    created_at: []const u8,
+
+    pub fn deinit(self: *const DependentResult, allocator: std.mem.Allocator) void {
+        allocator.free(self.issue_id);
         allocator.free(self.dep_type);
         allocator.free(self.created_at);
     }

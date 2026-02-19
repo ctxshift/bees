@@ -85,28 +85,57 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             allocator.free(deps);
         }
 
+        const dependents = try store.listDependents(allocator, issue_id);
+        defer {
+            for (dependents) |*d| d.deinit(allocator);
+            allocator.free(dependents);
+        }
+
         if (res.args.json != 0) {
             var json_buf: [4096]u8 = undefined;
             var json_w = io.JsonWriter.init(stdout, &json_buf);
             var jw = json_w.stringify();
+            try jw.beginObject();
+            try jw.objectField("depends_on");
             try jw.beginArray();
             for (deps) |dep| {
                 try jw.beginObject();
-                try jw.objectField("depends_on_id");
+                try jw.objectField("id");
                 try jw.write(dep.depends_on_id);
                 try jw.objectField("type");
                 try jw.write(dep.dep_type);
                 try jw.endObject();
             }
             try jw.endArray();
+            try jw.objectField("dependents");
+            try jw.beginArray();
+            for (dependents) |dep| {
+                try jw.beginObject();
+                try jw.objectField("id");
+                try jw.write(dep.issue_id);
+                try jw.objectField("type");
+                try jw.write(dep.dep_type);
+                try jw.endObject();
+            }
+            try jw.endArray();
+            try jw.endObject();
             try jw.writer.writeByte('\n');
             try jw.writer.flush();
         } else {
-            if (deps.len == 0) {
+            if (deps.len == 0 and dependents.len == 0) {
                 try stdout.print("No dependencies for {s}\n", .{issue_id});
             } else {
-                for (deps) |dep| {
-                    try stdout.print("  {s} ({s})\n", .{ dep.depends_on_id, dep.dep_type });
+                if (deps.len > 0) {
+                    try stdout.writeAll("Depends on:\n");
+                    for (deps) |dep| {
+                        try stdout.print("  {s} ({s})\n", .{ dep.depends_on_id, dep.dep_type });
+                    }
+                }
+                if (dependents.len > 0) {
+                    try stdout.writeAll("Dependents:\n");
+                    for (dependents) |dep| {
+                        try stdout.print("  {s} ({s})\n", .{ dep.issue_id, dep.dep_type });
+                    }
                 }
             }
         }
