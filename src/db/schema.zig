@@ -129,4 +129,13 @@ pub fn init(db: sqlite.Database) !void {
     try db.exec(metadata_ddl, .{});
     try db.exec(ready_view, .{});
     try db.exec(blocked_view, .{});
+
+    // Schema migrations: add columns that may not exist in older databases
+    inline for (.{
+        "ALTER TABLE issues ADD COLUMN design TEXT",
+        "ALTER TABLE issues ADD COLUMN acceptance_criteria TEXT",
+        "ALTER TABLE issues ADD COLUMN notes TEXT",
+    }) |ddl| {
+        db.exec(ddl, .{}) catch {};
+    }
 }

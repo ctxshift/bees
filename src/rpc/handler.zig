@@ -108,6 +108,26 @@ fn handleList(allocator: std.mem.Allocator, store: *Store, args: ?std.json.Value
         allocator.free(issues);
     }
 
+    // Bulk-fetch labels and deps for hydrated responses
+    const all_labels = try store.listAllLabels(allocator);
+    defer {
+        for (all_labels) |e| {
+            allocator.free(e.issue_id);
+            allocator.free(e.label);
+        }
+        allocator.free(all_labels);
+    }
+
+    const all_deps = try store.listAllDeps(allocator);
+    defer {
+        for (all_deps) |e| {
+            allocator.free(e.issue_id);
+            allocator.free(e.depends_on_id);
+            allocator.free(e.dep_type);
+        }
+        allocator.free(all_deps);
+    }
+
     var buf = Buf{};
     errdefer buf.deinit(allocator);
 
@@ -115,6 +135,47 @@ fn handleList(allocator: std.mem.Allocator, store: *Store, args: ?std.json.Value
     for (issues, 0..) |*issue, i| {
         if (i > 0) try buf.append(allocator, ',');
         try writeIssueJson(allocator, &buf, issue);
+        // Remove trailing '}' to append extra fields
+        _ = buf.pop();
+
+        // Add labels for this issue
+        try buf.appendSlice(allocator, ",\"labels\":[");
+        var label_first = true;
+        for (all_labels) |e| {
+            if (std.mem.eql(u8, e.issue_id, issue.id)) {
+                if (!label_first) try buf.append(allocator, ',');
+                label_first = false;
+                try appendJsonString(allocator, &buf, e.label);
+            }
+        }
+        try buf.append(allocator, ']');
+
+        // Add dependencies (blocked-by: issues this one depends on)
+        try buf.appendSlice(allocator, ",\"dependencies\":[");
+        var dep_first = true;
+        for (all_deps) |e| {
+            if (std.mem.eql(u8, e.issue_id, issue.id)) {
+                if (!dep_first) try buf.append(allocator, ',');
+                dep_first = false;
+                // Include related issue details for the extension
+                try writeDepIssueJson(allocator, &buf, e.depends_on_id, e.dep_type, store, issues);
+            }
+        }
+        try buf.append(allocator, ']');
+
+        // Add dependents (blocks: issues that depend on this one)
+        try buf.appendSlice(allocator, ",\"dependents\":[");
+        var block_first = true;
+        for (all_deps) |e| {
+            if (std.mem.eql(u8, e.depends_on_id, issue.id)) {
+                if (!block_first) try buf.append(allocator, ',');
+                block_first = false;
+                try writeDepIssueJson(allocator, &buf, e.issue_id, e.dep_type, store, issues);
+            }
+        }
+        try buf.append(allocator, ']');
+
+        try buf.append(allocator, '}');
     }
     try buf.append(allocator, ']');
 
@@ -165,6 +226,25 @@ fn handleReady(allocator: std.mem.Allocator, store: *Store) ![]const u8 {
         allocator.free(issues);
     }
 
+    const all_labels = try store.listAllLabels(allocator);
+    defer {
+        for (all_labels) |e| {
+            allocator.free(e.issue_id);
+            allocator.free(e.label);
+        }
+        allocator.free(all_labels);
+    }
+
+    const all_deps = try store.listAllDeps(allocator);
+    defer {
+        for (all_deps) |e| {
+            allocator.free(e.issue_id);
+            allocator.free(e.depends_on_id);
+            allocator.free(e.dep_type);
+        }
+        allocator.free(all_deps);
+    }
+
     var buf = Buf{};
     errdefer buf.deinit(allocator);
 
@@ -172,6 +252,42 @@ fn handleReady(allocator: std.mem.Allocator, store: *Store) ![]const u8 {
     for (issues, 0..) |*issue, i| {
         if (i > 0) try buf.append(allocator, ',');
         try writeIssueJson(allocator, &buf, issue);
+        _ = buf.pop();
+
+        try buf.appendSlice(allocator, ",\"labels\":[");
+        var label_first = true;
+        for (all_labels) |e| {
+            if (std.mem.eql(u8, e.issue_id, issue.id)) {
+                if (!label_first) try buf.append(allocator, ',');
+                label_first = false;
+                try appendJsonString(allocator, &buf, e.label);
+            }
+        }
+        try buf.append(allocator, ']');
+
+        try buf.appendSlice(allocator, ",\"dependencies\":[");
+        var dep_first = true;
+        for (all_deps) |e| {
+            if (std.mem.eql(u8, e.issue_id, issue.id)) {
+                if (!dep_first) try buf.append(allocator, ',');
+                dep_first = false;
+                try writeDepIssueJson(allocator, &buf, e.depends_on_id, e.dep_type, store, issues);
+            }
+        }
+        try buf.append(allocator, ']');
+
+        try buf.appendSlice(allocator, ",\"dependents\":[");
+        var block_first = true;
+        for (all_deps) |e| {
+            if (std.mem.eql(u8, e.depends_on_id, issue.id)) {
+                if (!block_first) try buf.append(allocator, ',');
+                block_first = false;
+                try writeDepIssueJson(allocator, &buf, e.issue_id, e.dep_type, store, issues);
+            }
+        }
+        try buf.append(allocator, ']');
+
+        try buf.append(allocator, '}');
     }
     try buf.append(allocator, ']');
 
@@ -220,6 +336,12 @@ fn handleCreate(allocator: std.mem.Allocator, store: *Store, request: *const Req
         .created_by = created_by,
         .created_at = &now,
         .updated_at = &now,
+        .design = protocol.getArgString(args, "design"),
+        .acceptance_criteria = protocol.getArgString(args, "acceptance_criteria"),
+        .notes = protocol.getArgString(args, "notes"),
+        .external_ref = protocol.getArgString(args, "external_ref"),
+        .due_at = protocol.getArgString(args, "due_at"),
+        .defer_until = protocol.getArgString(args, "defer_until"),
     });
 
     recordMutation(state, .create, id_result.id, title);
@@ -243,14 +365,21 @@ fn handleUpdate(allocator: std.mem.Allocator, store: *Store, request: *const Req
         .description = protocol.getArgString(args, "description"),
         .issue_type = protocol.getArgString(args, "type") orelse protocol.getArgString(args, "issue_type"),
         .owner = protocol.getArgString(args, "owner"),
+        .design = protocol.getArgString(args, "design"),
+        .acceptance_criteria = protocol.getArgString(args, "acceptance_criteria"),
+        .notes = protocol.getArgString(args, "notes"),
+        .external_ref = protocol.getArgString(args, "external_ref"),
+        .due_at = protocol.getArgString(args, "due_at"),
+        .defer_until = protocol.getArgString(args, "defer_until"),
         .updated_at = now,
     });
 
-    // Handle labels if provided
+    // Handle labels if provided (extension sends "set_labels", also accept "labels")
     if (args) |a| {
         if (a == .object) {
-            if (a.object.get("labels")) |labels_val| {
-                if (labels_val == .array) {
+            const labels_val = a.object.get("set_labels") orelse a.object.get("labels");
+            if (labels_val) |lv| {
+                if (lv == .array) {
                     const existing = store.listLabels(allocator, id) catch &[_][]const u8{};
                     for (existing) |l| {
                         store.removeLabel(id, l) catch {};
@@ -258,7 +387,7 @@ fn handleUpdate(allocator: std.mem.Allocator, store: *Store, request: *const Req
                     }
                     allocator.free(existing);
 
-                    for (labels_val.array.items) |item| {
+                    for (lv.array.items) |item| {
                         if (item == .string) {
                             store.addLabel(id, item.string, &now) catch {};
                         }
@@ -528,6 +657,18 @@ fn writeIssueJson(allocator: std.mem.Allocator, buf: *Buf, issue: *const store_m
         try buf.appendSlice(allocator, ",\"metadata\":");
         try appendJsonString(allocator, buf, v);
     }
+    if (issue.design) |v| {
+        try buf.appendSlice(allocator, ",\"design\":");
+        try appendJsonString(allocator, buf, v);
+    }
+    if (issue.acceptance_criteria) |v| {
+        try buf.appendSlice(allocator, ",\"acceptance_criteria\":");
+        try appendJsonString(allocator, buf, v);
+    }
+    if (issue.notes) |v| {
+        try buf.appendSlice(allocator, ",\"notes\":");
+        try appendJsonString(allocator, buf, v);
+    }
     try buf.append(allocator, '}');
 }
 
@@ -576,6 +717,65 @@ fn writeHydratedShowJson(
     try buf.append(allocator, ']');
 
     try buf.append(allocator, '}');
+}
+
+/// Write a dependency entry with the related issue's details (id, title, status, priority, type, dependency_type).
+/// Looks up the issue from the already-fetched list first, falls back to a DB query.
+fn writeDepIssueJson(
+    allocator: std.mem.Allocator,
+    buf: *Buf,
+    related_id: []const u8,
+    dep_type: []const u8,
+    store: *Store,
+    cached_issues: []const store_mod.IssueResult,
+) !void {
+    // Try to find the related issue in the cached list
+    var title: []const u8 = "";
+    var status: []const u8 = "open";
+    var priority: i32 = 2;
+    var issue_type: []const u8 = "task";
+    var found = false;
+
+    for (cached_issues) |ci| {
+        if (std.mem.eql(u8, ci.id, related_id)) {
+            title = ci.title;
+            status = ci.status;
+            priority = ci.priority;
+            issue_type = ci.issue_type;
+            found = true;
+            break;
+        }
+    }
+
+    // Fallback to DB lookup if not in cached list (e.g., filtered out)
+    if (!found) {
+        if (store.getIssue(allocator, related_id) catch null) |issue| {
+            defer {
+                var m = issue;
+                m.deinit(allocator);
+            }
+            title = issue.title;
+            status = issue.status;
+            priority = issue.priority;
+            issue_type = issue.issue_type;
+        }
+    }
+
+    try buf.appendSlice(allocator, "{\"id\":\"");
+    try buf.appendSlice(allocator, related_id);
+    try buf.appendSlice(allocator, "\",\"title\":");
+    try appendJsonString(allocator, buf, title);
+    try buf.appendSlice(allocator, ",\"status\":\"");
+    try buf.appendSlice(allocator, status);
+    try buf.appendSlice(allocator, "\",\"priority\":");
+    var num_buf: [20]u8 = undefined;
+    const p_str = std.fmt.bufPrint(&num_buf, "{d}", .{priority}) catch unreachable;
+    try buf.appendSlice(allocator, p_str);
+    try buf.appendSlice(allocator, ",\"issue_type\":\"");
+    try buf.appendSlice(allocator, issue_type);
+    try buf.appendSlice(allocator, "\",\"dependency_type\":\"");
+    try buf.appendSlice(allocator, dep_type);
+    try buf.appendSlice(allocator, "\"}");
 }
 
 fn appendCommentJson(allocator: std.mem.Allocator, buf: *Buf, c: *const store_mod.CommentResult) !void {

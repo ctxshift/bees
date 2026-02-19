@@ -25,7 +25,12 @@ const IssueRow = struct {
     is_template: i32 = 0,
     ephemeral: i32 = 0,
     metadata: ?sqlite.Text = null,
+    design: ?sqlite.Text = null,
+    acceptance_criteria: ?sqlite.Text = null,
+    notes: ?sqlite.Text = null,
 };
+
+const issue_columns = "id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata, design, acceptance_criteria, notes";
 
 const CountRow = struct { count: i32 };
 
@@ -72,9 +77,15 @@ pub const Store = struct {
         created_by: ?[]const u8 = null,
         created_at: []const u8,
         updated_at: []const u8,
+        design: ?[]const u8 = null,
+        acceptance_criteria: ?[]const u8 = null,
+        notes: ?[]const u8 = null,
+        external_ref: ?[]const u8 = null,
+        due_at: ?[]const u8 = null,
+        defer_until: ?[]const u8 = null,
     }) !void {
         try self.db.exec(
-            "INSERT INTO issues (id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at) VALUES (:id, :title, :description, :status, :priority, :issue_type, :assignee, :owner, :created_by, :created_at, :updated_at)",
+            "INSERT INTO issues (id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, design, acceptance_criteria, notes, external_ref, due_at, defer_until) VALUES (:id, :title, :description, :status, :priority, :issue_type, :assignee, :owner, :created_by, :created_at, :updated_at, :design, :acceptance_criteria, :notes, :external_ref, :due_at, :defer_until)",
             .{
                 .id = sqlite.text(args.id),
                 .title = sqlite.text(args.title),
@@ -87,6 +98,12 @@ pub const Store = struct {
                 .created_by = if (args.created_by) |c| @as(?sqlite.Text, sqlite.text(c)) else null,
                 .created_at = sqlite.text(args.created_at),
                 .updated_at = sqlite.text(args.updated_at),
+                .design = if (args.design) |d| @as(?sqlite.Text, sqlite.text(d)) else null,
+                .acceptance_criteria = if (args.acceptance_criteria) |a| @as(?sqlite.Text, sqlite.text(a)) else null,
+                .notes = if (args.notes) |n| @as(?sqlite.Text, sqlite.text(n)) else null,
+                .external_ref = if (args.external_ref) |e| @as(?sqlite.Text, sqlite.text(e)) else null,
+                .due_at = if (args.due_at) |d| @as(?sqlite.Text, sqlite.text(d)) else null,
+                .defer_until = if (args.defer_until) |d| @as(?sqlite.Text, sqlite.text(d)) else null,
             },
         );
     }
@@ -96,7 +113,7 @@ pub const Store = struct {
         const stmt = try self.db.prepare(
             struct { id: sqlite.Text },
             IssueRow,
-            "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues WHERE id = :id",
+            "SELECT " ++ issue_columns ++ " FROM issues WHERE id = :id",
         );
         defer stmt.finalize();
 
@@ -117,7 +134,7 @@ pub const Store = struct {
             const stmt = try self.db.prepare(
                 struct { status: sqlite.Text, assignee: sqlite.Text, priority: i32 },
                 IssueRow,
-                "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues WHERE status = :status AND assignee = :assignee AND priority = :priority ORDER BY priority ASC, created_at DESC",
+                "SELECT " ++ issue_columns ++ " FROM issues WHERE status = :status AND assignee = :assignee AND priority = :priority ORDER BY priority ASC, created_at DESC",
             );
             defer stmt.finalize();
             stmt.bind(.{
@@ -130,7 +147,7 @@ pub const Store = struct {
             const stmt = try self.db.prepare(
                 struct { status: sqlite.Text, assignee: sqlite.Text },
                 IssueRow,
-                "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues WHERE status = :status AND assignee = :assignee ORDER BY priority ASC, created_at DESC",
+                "SELECT " ++ issue_columns ++ " FROM issues WHERE status = :status AND assignee = :assignee ORDER BY priority ASC, created_at DESC",
             );
             defer stmt.finalize();
             stmt.bind(.{
@@ -142,7 +159,7 @@ pub const Store = struct {
             const stmt = try self.db.prepare(
                 struct { status: sqlite.Text, priority: i32 },
                 IssueRow,
-                "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues WHERE status = :status AND priority = :priority ORDER BY priority ASC, created_at DESC",
+                "SELECT " ++ issue_columns ++ " FROM issues WHERE status = :status AND priority = :priority ORDER BY priority ASC, created_at DESC",
             );
             defer stmt.finalize();
             stmt.bind(.{
@@ -154,7 +171,7 @@ pub const Store = struct {
             const stmt = try self.db.prepare(
                 struct { assignee: sqlite.Text, priority: i32 },
                 IssueRow,
-                "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues WHERE assignee = :assignee AND priority = :priority ORDER BY priority ASC, created_at DESC",
+                "SELECT " ++ issue_columns ++ " FROM issues WHERE assignee = :assignee AND priority = :priority ORDER BY priority ASC, created_at DESC",
             );
             defer stmt.finalize();
             stmt.bind(.{
@@ -166,7 +183,7 @@ pub const Store = struct {
             const stmt = try self.db.prepare(
                 struct { status: sqlite.Text },
                 IssueRow,
-                "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues WHERE status = :status ORDER BY priority ASC, created_at DESC",
+                "SELECT " ++ issue_columns ++ " FROM issues WHERE status = :status ORDER BY priority ASC, created_at DESC",
             );
             defer stmt.finalize();
             stmt.bind(.{ .status = sqlite.text(status) }) catch return results.toOwnedSlice(allocator);
@@ -175,7 +192,7 @@ pub const Store = struct {
             const stmt = try self.db.prepare(
                 struct { assignee: sqlite.Text },
                 IssueRow,
-                "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues WHERE assignee = :assignee ORDER BY priority ASC, created_at DESC",
+                "SELECT " ++ issue_columns ++ " FROM issues WHERE assignee = :assignee ORDER BY priority ASC, created_at DESC",
             );
             defer stmt.finalize();
             stmt.bind(.{ .assignee = sqlite.text(assignee) }) catch return results.toOwnedSlice(allocator);
@@ -184,7 +201,7 @@ pub const Store = struct {
             const stmt = try self.db.prepare(
                 struct { priority: i32 },
                 IssueRow,
-                "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues WHERE priority = :priority ORDER BY priority ASC, created_at DESC",
+                "SELECT " ++ issue_columns ++ " FROM issues WHERE priority = :priority ORDER BY priority ASC, created_at DESC",
             );
             defer stmt.finalize();
             stmt.bind(.{ .priority = priority }) catch return results.toOwnedSlice(allocator);
@@ -193,7 +210,7 @@ pub const Store = struct {
             const stmt = try self.db.prepare(
                 struct {},
                 IssueRow,
-                "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM issues ORDER BY priority ASC, created_at DESC",
+                "SELECT " ++ issue_columns ++ " FROM issues ORDER BY priority ASC, created_at DESC",
             );
             defer stmt.finalize();
             try self.collectRows(allocator, stmt, &results);
@@ -253,6 +270,42 @@ pub const Store = struct {
                 .{ .owner = sqlite.text(owner), .updated_at = sqlite.text(&args.updated_at), .id = sqlite.text(issue_id) },
             );
         }
+        if (args.design) |design| {
+            try self.db.exec(
+                "UPDATE issues SET design = :design, updated_at = :updated_at WHERE id = :id",
+                .{ .design = sqlite.text(design), .updated_at = sqlite.text(&args.updated_at), .id = sqlite.text(issue_id) },
+            );
+        }
+        if (args.acceptance_criteria) |ac| {
+            try self.db.exec(
+                "UPDATE issues SET acceptance_criteria = :acceptance_criteria, updated_at = :updated_at WHERE id = :id",
+                .{ .acceptance_criteria = sqlite.text(ac), .updated_at = sqlite.text(&args.updated_at), .id = sqlite.text(issue_id) },
+            );
+        }
+        if (args.notes) |n| {
+            try self.db.exec(
+                "UPDATE issues SET notes = :notes, updated_at = :updated_at WHERE id = :id",
+                .{ .notes = sqlite.text(n), .updated_at = sqlite.text(&args.updated_at), .id = sqlite.text(issue_id) },
+            );
+        }
+        if (args.external_ref) |er| {
+            try self.db.exec(
+                "UPDATE issues SET external_ref = :external_ref, updated_at = :updated_at WHERE id = :id",
+                .{ .external_ref = sqlite.text(er), .updated_at = sqlite.text(&args.updated_at), .id = sqlite.text(issue_id) },
+            );
+        }
+        if (args.due_at) |due| {
+            try self.db.exec(
+                "UPDATE issues SET due_at = :due_at, updated_at = :updated_at WHERE id = :id",
+                .{ .due_at = sqlite.text(due), .updated_at = sqlite.text(&args.updated_at), .id = sqlite.text(issue_id) },
+            );
+        }
+        if (args.defer_until) |defer_until| {
+            try self.db.exec(
+                "UPDATE issues SET defer_until = :defer_until, updated_at = :updated_at WHERE id = :id",
+                .{ .defer_until = sqlite.text(defer_until), .updated_at = sqlite.text(&args.updated_at), .id = sqlite.text(issue_id) },
+            );
+        }
     }
 
     pub fn closeIssue(self: *Store, issue_id: []const u8, close_reason: ?[]const u8, closed_at: []const u8) !void {
@@ -281,7 +334,7 @@ pub const Store = struct {
         const stmt = try self.db.prepare(
             struct {},
             IssueRow,
-            "SELECT id, title, description, status, priority, issue_type, assignee, owner, created_by, created_at, updated_at, closed_at, close_reason, due_at, defer_until, estimated_minutes, external_ref, pinned, is_template, ephemeral, metadata FROM ready_issues ORDER BY priority ASC, created_at ASC",
+            "SELECT " ++ issue_columns ++ " FROM ready_issues ORDER BY priority ASC, created_at ASC",
         );
         defer stmt.finalize();
 
@@ -339,6 +392,30 @@ pub const Store = struct {
                 .dep_type = try allocator.dupe(u8, row.dep_type.data),
                 .created_at = try allocator.dupe(u8, row.created_at.data),
             });
+        }
+
+        return results.toOwnedSlice(allocator);
+    }
+
+    /// Returns issue IDs that are blocked by the given issue (reverse deps).
+    pub fn listBlocks(self: *Store, allocator: std.mem.Allocator, issue_id: []const u8) ![][]const u8 {
+        var results = std.ArrayList([]const u8){};
+        errdefer {
+            for (results.items) |item| allocator.free(item);
+            results.deinit(allocator);
+        }
+
+        const stmt = try self.db.prepare(
+            struct { depends_on_id: sqlite.Text },
+            struct { issue_id: sqlite.Text },
+            "SELECT issue_id FROM dependencies WHERE depends_on_id = :depends_on_id",
+        );
+        defer stmt.finalize();
+        stmt.bind(.{ .depends_on_id = sqlite.text(issue_id) }) catch return results.toOwnedSlice(allocator);
+
+        while (true) {
+            const row = (try stmt.step()) orelse break;
+            try results.append(allocator, try allocator.dupe(u8, row.issue_id.data));
         }
 
         return results.toOwnedSlice(allocator);
@@ -432,6 +509,69 @@ pub const Store = struct {
         return results.toOwnedSlice(allocator);
     }
 
+    // --- Bulk fetches (for hydrated list responses) ---
+
+    pub const LabelEntry = struct { issue_id: []const u8, label: []const u8 };
+    pub const DepEntry = struct { issue_id: []const u8, depends_on_id: []const u8, dep_type: []const u8 };
+
+    pub fn listAllLabels(self: *Store, allocator: std.mem.Allocator) ![]LabelEntry {
+        var results = std.ArrayList(LabelEntry){};
+        errdefer {
+            for (results.items) |e| {
+                allocator.free(e.issue_id);
+                allocator.free(e.label);
+            }
+            results.deinit(allocator);
+        }
+
+        const stmt = try self.db.prepare(
+            struct {},
+            struct { issue_id: sqlite.Text, label: sqlite.Text },
+            "SELECT issue_id, label FROM labels ORDER BY issue_id, label",
+        );
+        defer stmt.finalize();
+
+        while (true) {
+            const row = (try stmt.step()) orelse break;
+            try results.append(allocator, .{
+                .issue_id = try allocator.dupe(u8, row.issue_id.data),
+                .label = try allocator.dupe(u8, row.label.data),
+            });
+        }
+
+        return results.toOwnedSlice(allocator);
+    }
+
+    pub fn listAllDeps(self: *Store, allocator: std.mem.Allocator) ![]DepEntry {
+        var results = std.ArrayList(DepEntry){};
+        errdefer {
+            for (results.items) |e| {
+                allocator.free(e.issue_id);
+                allocator.free(e.depends_on_id);
+                allocator.free(e.dep_type);
+            }
+            results.deinit(allocator);
+        }
+
+        const stmt = try self.db.prepare(
+            struct {},
+            struct { issue_id: sqlite.Text, depends_on_id: sqlite.Text, dep_type: sqlite.Text },
+            "SELECT issue_id, depends_on_id, dep_type FROM dependencies",
+        );
+        defer stmt.finalize();
+
+        while (true) {
+            const row = (try stmt.step()) orelse break;
+            try results.append(allocator, .{
+                .issue_id = try allocator.dupe(u8, row.issue_id.data),
+                .depends_on_id = try allocator.dupe(u8, row.depends_on_id.data),
+                .dep_type = try allocator.dupe(u8, row.dep_type.data),
+            });
+        }
+
+        return results.toOwnedSlice(allocator);
+    }
+
     // --- Stats ---
 
     pub fn countByStatus(self: *Store, status: []const u8) i32 {
@@ -493,6 +633,12 @@ pub const UpdateArgs = struct {
     description: ?[]const u8 = null,
     issue_type: ?[]const u8 = null,
     owner: ?[]const u8 = null,
+    design: ?[]const u8 = null,
+    acceptance_criteria: ?[]const u8 = null,
+    notes: ?[]const u8 = null,
+    external_ref: ?[]const u8 = null,
+    due_at: ?[]const u8 = null,
+    defer_until: ?[]const u8 = null,
     updated_at: [20]u8,
 };
 
@@ -518,6 +664,9 @@ pub const IssueResult = struct {
     is_template: i32,
     ephemeral: i32,
     metadata: ?[]const u8,
+    design: ?[]const u8,
+    acceptance_criteria: ?[]const u8,
+    notes: ?[]const u8,
 
     pub fn fromRow(allocator: std.mem.Allocator, row: IssueRow) !IssueResult {
         return .{
@@ -542,6 +691,9 @@ pub const IssueResult = struct {
             .is_template = row.is_template,
             .ephemeral = row.ephemeral,
             .metadata = if (row.metadata) |m| try allocator.dupe(u8, m.data) else null,
+            .design = if (row.design) |d| try allocator.dupe(u8, d.data) else null,
+            .acceptance_criteria = if (row.acceptance_criteria) |a| try allocator.dupe(u8, a.data) else null,
+            .notes = if (row.notes) |n| try allocator.dupe(u8, n.data) else null,
         };
     }
 
@@ -562,6 +714,9 @@ pub const IssueResult = struct {
         if (self.defer_until) |d| allocator.free(d);
         if (self.external_ref) |e| allocator.free(e);
         if (self.metadata) |m| allocator.free(m);
+        if (self.design) |d| allocator.free(d);
+        if (self.acceptance_criteria) |a| allocator.free(a);
+        if (self.notes) |n| allocator.free(n);
     }
 
     pub fn jsonStringify(self: *const IssueResult, jw: anytype) !void {
@@ -634,6 +789,18 @@ pub const IssueResult = struct {
         }
         if (self.metadata) |v| {
             try jw.objectField("metadata");
+            try jw.write(v);
+        }
+        if (self.design) |v| {
+            try jw.objectField("design");
+            try jw.write(v);
+        }
+        if (self.acceptance_criteria) |v| {
+            try jw.objectField("acceptance_criteria");
+            try jw.write(v);
+        }
+        if (self.notes) |v| {
+            try jw.objectField("notes");
             try jw.write(v);
         }
         try jw.endObject();

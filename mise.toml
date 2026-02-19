@@ -9,6 +9,7 @@ run = "zig build"
 description = "Build and install bees to ~/.local/bin"
 depends = ["build"]
 run = """
+rm -f ~/.local/bin/bees
 cp zig-out/bin/bees ~/.local/bin/
 ln -sf bees ~/.local/bin/bd
 """

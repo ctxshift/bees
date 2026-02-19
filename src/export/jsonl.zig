@@ -111,6 +111,18 @@ fn writeHydratedIssue(jw: *std.json.Stringify, issue: *const IssueResult, labels
         try jw.objectField("external_ref");
         try jw.write(v);
     }
+    if (issue.design) |v| {
+        try jw.objectField("design");
+        try jw.write(v);
+    }
+    if (issue.acceptance_criteria) |v| {
+        try jw.objectField("acceptance_criteria");
+        try jw.write(v);
+    }
+    if (issue.notes) |v| {
+        try jw.objectField("notes");
+        try jw.write(v);
+    }
 
     // Embed labels as array
     if (labels.len > 0) {

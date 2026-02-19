@@ -113,6 +113,9 @@ pub const Issue = struct {
     is_template: i32 = 0,
     ephemeral: i32 = 0,
     metadata: ?[]const u8 = null,
+    design: ?[]const u8 = null,
+    acceptance_criteria: ?[]const u8 = null,
+    notes: ?[]const u8 = null,
 
     pub fn jsonStringify(self: *const Issue, jw: anytype) !void {
         try jw.beginObject();
@@ -184,6 +187,18 @@ pub const Issue = struct {
         }
         if (self.metadata) |v| {
             try jw.objectField("metadata");
+            try jw.write(v);
+        }
+        if (self.design) |v| {
+            try jw.objectField("design");
+            try jw.write(v);
+        }
+        if (self.acceptance_criteria) |v| {
+            try jw.objectField("acceptance_criteria");
+            try jw.write(v);
+        }
+        if (self.notes) |v| {
+            try jw.objectField("notes");
             try jw.write(v);
         }
         try jw.endObject();

@@ -83,6 +83,12 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         if (issue.assignee) |v| try stdout.print("Assignee:    {s}\n", .{v});
         if (issue.owner) |v| try stdout.print("Owner:       {s}\n", .{v});
         if (issue.description) |v| try stdout.print("Description: {s}\n", .{v});
+        if (issue.design) |v| try stdout.print("Design:      {s}\n", .{v});
+        if (issue.acceptance_criteria) |v| try stdout.print("Acceptance:  {s}\n", .{v});
+        if (issue.notes) |v| try stdout.print("Notes:       {s}\n", .{v});
+        if (issue.external_ref) |v| try stdout.print("External:    {s}\n", .{v});
+        if (issue.due_at) |v| try stdout.print("Due:         {s}\n", .{v});
+        if (issue.defer_until) |v| try stdout.print("Defer until: {s}\n", .{v});
         try stdout.print("Created:     {s}\n", .{issue.created_at});
         try stdout.print("Updated:     {s}\n", .{issue.updated_at});
         if (issue.closed_at) |v| try stdout.print("Closed:      {s}\n", .{v});

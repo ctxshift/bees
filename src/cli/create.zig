@@ -13,6 +13,12 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         \\-a, --assignee <str>  Assignee
         \\-o, --owner <str>     Owner
         \\-d, --description <str>  Description
+        \\    --design <str>    Design notes
+        \\    --acceptance <str> Acceptance criteria
+        \\    --notes <str>     Working notes
+        \\    --external-ref <str> External reference
+        \\    --due <str>       Due date (ISO 8601)
+        \\    --defer <str>     Defer until date (ISO 8601)
         \\    --json            Output as JSON
         \\<str>
         \\
@@ -30,7 +36,24 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
     if (res.args.help != 0) {
         const stderr = io.stderr();
-        try stderr.writeAll("Usage: bees create <title> [options]\n\nOptions:\n  -t, --type <type>          Issue type (task, bug, feature, epic, story)\n  -p, --priority <N>         Priority (1=critical, 2=high, 3=medium, 4=low)\n  -a, --assignee <name>      Assignee\n  -o, --owner <name>         Owner\n  -d, --description <text>   Description\n      --json                 Output as JSON\n");
+        try stderr.writeAll(
+            \\Usage: bees create <title> [options]
+            \\
+            \\Options:
+            \\  -t, --type <type>          Issue type (task, bug, feature, epic, story)
+            \\  -p, --priority <N>         Priority (1=critical, 2=high, 3=medium, 4=low)
+            \\  -a, --assignee <name>      Assignee
+            \\  -o, --owner <name>         Owner
+            \\  -d, --description <text>   Description
+            \\      --design <text>        Design notes
+            \\      --acceptance <text>    Acceptance criteria
+            \\      --notes <text>         Working notes
+            \\      --external-ref <ref>   External reference
+            \\      --due <date>           Due date (ISO 8601)
+            \\      --defer <date>         Defer until date (ISO 8601)
+            \\      --json                 Output as JSON
+            \\
+        );
         return;
     }
 
@@ -67,6 +90,12 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         .owner = res.args.owner,
         .created_at = &now,
         .updated_at = &now,
+        .design = res.args.design,
+        .acceptance_criteria = res.args.acceptance,
+        .notes = res.args.notes,
+        .external_ref = res.args.@"external-ref",
+        .due_at = res.args.due,
+        .defer_until = res.args.@"defer",
     });
 
     const out = io.stdout();

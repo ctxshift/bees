@@ -57,7 +57,7 @@ pub fn run(allocator: std.mem.Allocator, bees_dir_path: []const u8) !void {
     const server = try std.posix.socket(std.posix.AF.UNIX, std.posix.SOCK.STREAM | std.posix.SOCK.CLOEXEC | std.posix.SOCK.NONBLOCK, 0);
     defer std.posix.close(server);
     try std.posix.bind(server, &addr.any, addr.getOsSockLen());
-    try std.posix.listen(server, 5);
+    try std.posix.listen(server, 128);
 
     defer std.fs.cwd().deleteFile(sock_path) catch {};
 
@@ -81,11 +81,10 @@ pub fn run(allocator: std.mem.Allocator, bees_dir_path: []const u8) !void {
     var log_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const log_path = std.fmt.bufPrint(&log_path_buf, "{s}/daemon.log", .{bees_dir_path}) catch
         return error.PathTooLong;
-    const log_file = std.fs.cwd().createFile(log_path, .{ .truncate = false }) catch {
+    const log_file = std.fs.cwd().createFile(log_path, .{}) catch {
         return error.Unexpected;
     };
     defer log_file.close();
-    log_file.seekFromEnd(0) catch {};
     const log_writer = log_file.deprecatedWriter();
     log_writer.print("bees daemon started (PID: {d})\n", .{std.os.linux.getpid()}) catch {};
     log_writer.print("Listening on {s}\n", .{sock_path}) catch {};
@@ -130,28 +129,37 @@ fn handleConnection(
 ) void {
     defer std.posix.close(conn_fd);
 
+    // Set receive timeout so we don't block the accept loop forever
+    // if a client keeps the connection open without sending data.
+    const timeout = std.posix.timeval{ .sec = 2, .usec = 0 };
+    std.posix.setsockopt(conn_fd, std.posix.SOL.SOCKET, std.posix.SO.RCVTIMEO, std.mem.asBytes(&timeout)) catch {};
+
     const conn_file = std.fs.File{ .handle = conn_fd };
     const writer = conn_file.deprecatedWriter();
 
-    // Line buffer for reading from connection
-    var line_buf = std.ArrayList(u8){};
-    defer line_buf.deinit(allocator);
+    // Read buffer for chunked reading (much faster than byte-at-a-time)
+    var read_buf: [8192]u8 = undefined;
+    var carry = std.ArrayList(u8){};
+    defer carry.deinit(allocator);
 
     while (!shutdown_requested) {
-        // Read one line by reading bytes until we hit '\n'
-        line_buf.clearRetainingCapacity();
-        const line = readLineFromFile(conn_file, allocator, &line_buf) catch |err| {
+        const line = readLine(conn_file, &read_buf, &carry, allocator) catch |err| {
             if (err == error.EndOfStream) return;
             log_writer.print("Read error: {}\n", .{err}) catch {};
             return;
         };
+        defer allocator.free(line);
 
         // Trim trailing \r if present
         const trimmed = std.mem.trimRight(u8, line, "\r");
         if (trimmed.len == 0) continue;
 
+        // Log raw request for debugging
+        log_writer.print("REQ: {s}\n", .{trimmed}) catch {};
+
         // Parse request
         var parsed = protocol.parseRequest(allocator, trimmed) catch {
+            log_writer.writeAll("REQ: parse failed\n") catch {};
             protocol.writeError(writer, "invalid JSON request") catch return;
             continue;
         };
@@ -159,6 +167,7 @@ fn handleConnection(
 
         // Dispatch
         const result = handler.handleRequest(allocator, store, &parsed.request, state) catch |err| {
+            log_writer.print("REQ: handler error: {s}\n", .{@errorName(err)}) catch {};
             var err_buf: [256]u8 = undefined;
             const err_msg = std.fmt.bufPrint(&err_buf, "internal error: {s}", .{@errorName(err)}) catch "internal error";
             protocol.writeError(writer, err_msg) catch return;
@@ -175,28 +184,63 @@ fn handleConnection(
 
         // Check if result is an error
         if (handler.isError(result)) {
+            log_writer.print("RES: error: {s}\n", .{handler.errorMessage(result)}) catch {};
             protocol.writeError(writer, handler.errorMessage(result)) catch return;
         } else {
+            log_writer.print("RES: ok ({d} bytes)\n", .{result.len}) catch {};
             protocol.writeSuccess(writer, result) catch return;
         }
     }
 }
 
-fn readLineFromFile(file: std.fs.File, allocator: std.mem.Allocator, buf: *std.ArrayList(u8)) ![]const u8 {
-    var byte: [1]u8 = undefined;
+/// Read a newline-delimited line from a file, using chunked reads.
+/// Returns an owned slice that the caller must free.
+fn readLine(file: std.fs.File, buf: *[8192]u8, carry: *std.ArrayList(u8), allocator: std.mem.Allocator) ![]const u8 {
+    // Check if carry already contains a full line from a previous read
+    if (std.mem.indexOf(u8, carry.items, "\n")) |nl| {
+        const line = try allocator.dupe(u8, carry.items[0..nl]);
+        // Shift remaining data to front
+        const remaining = carry.items.len - nl - 1;
+        if (remaining > 0) {
+            std.mem.copyForwards(u8, carry.items[0..remaining], carry.items[nl + 1 ..]);
+        }
+        carry.shrinkRetainingCapacity(remaining);
+        return line;
+    }
+
     while (true) {
-        const n = file.read(&byte) catch |err| {
-            if (buf.items.len > 0) return buf.items;
+        const n = file.read(buf) catch |err| {
+            if (carry.items.len > 0) {
+                const line = try allocator.dupe(u8, carry.items);
+                carry.clearRetainingCapacity();
+                return line;
+            }
             return err;
         };
         if (n == 0) {
-            if (buf.items.len > 0) return buf.items;
+            if (carry.items.len > 0) {
+                const line = try allocator.dupe(u8, carry.items);
+                carry.clearRetainingCapacity();
+                return line;
+            }
             return error.EndOfStream;
         }
-        if (byte[0] == '\n') {
-            return buf.items;
+
+        const chunk = buf[0..n];
+        if (std.mem.indexOf(u8, chunk, "\n")) |nl| {
+            // Found newline — combine carry + chunk[0..nl]
+            try carry.appendSlice(allocator, chunk[0..nl]);
+            const line = try allocator.dupe(u8, carry.items);
+            // Store remainder after newline for next call
+            carry.clearRetainingCapacity();
+            if (nl + 1 < n) {
+                try carry.appendSlice(allocator, chunk[nl + 1 .. n]);
+            }
+            return line;
+        } else {
+            // No newline yet, accumulate
+            try carry.appendSlice(allocator, chunk);
+            if (carry.items.len > 65536) return error.StreamTooLong;
         }
-        if (buf.items.len >= 65536) return error.StreamTooLong;
-        try buf.append(allocator, byte[0]);
     }
 }

@@ -14,6 +14,8 @@ const label_cmd = @import("cli/label.zig");
 const config_cmd = @import("cli/config_cmd.zig");
 const sync_cmd = @import("cli/sync.zig");
 const prime_cmd = @import("cli/prime.zig");
+const comment_cmd = @import("cli/comment_cmd.zig");
+const edit_cmd = @import("cli/edit.zig");
 const daemon_cmd = @import("cli/daemon_cmd.zig");
 
 pub fn openDb(allocator: std.mem.Allocator) !sqlite.Database {
@@ -105,6 +107,10 @@ fn run() !void {
         try dep_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "label")) {
         try label_cmd.run(allocator, &iter);
+    } else if (std.mem.eql(u8, subcmd, "comment")) {
+        try comment_cmd.run(allocator, &iter);
+    } else if (std.mem.eql(u8, subcmd, "edit")) {
+        try edit_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "config")) {
         try config_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "sync")) {
@@ -137,6 +143,8 @@ fn printUsage() void {
         \\  update        Update an issue
         \\  close         Close an issue
         \\  ready         Show ready issues (no blockers)
+        \\  comment       Manage comments
+        \\  edit          Edit issue fields with $EDITOR
         \\  dep           Manage dependencies
         \\  label         Manage labels
         \\  config        Get/set configuration

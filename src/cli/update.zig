@@ -15,6 +15,12 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         \\-d, --description <str> New description
         \\-t, --type <str>        New issue type
         \\-o, --owner <str>       New owner
+        \\    --design <str>      Design notes
+        \\    --acceptance <str>  Acceptance criteria
+        \\    --notes <str>       Working notes
+        \\    --external-ref <str> External reference
+        \\    --due <str>         Due date (ISO 8601)
+        \\    --defer <str>       Defer until date (ISO 8601)
         \\    --json              Output as JSON
         \\<str>
         \\
@@ -31,13 +37,32 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
     defer res.deinit();
 
     if (res.args.help != 0) {
-        const stderr = std.fs.File.stderr().deprecatedWriter();
-        try stderr.writeAll("Usage: bees update <id> [options]\n\nOptions:\n  --title <text>           New title\n  -s, --status <status>    New status\n  -p, --priority <N>       New priority\n  -a, --assignee <name>    New assignee\n  -d, --description <text> New description\n  -t, --type <type>        New issue type\n  -o, --owner <name>       New owner\n      --json               Output as JSON\n");
+        const stderr = io.stderr();
+        try stderr.writeAll(
+            \\Usage: bees update <id> [options]
+            \\
+            \\Options:
+            \\      --title <text>           New title
+            \\  -s, --status <status>        New status (open, in_progress, closed, deferred)
+            \\  -p, --priority <N>           New priority (1-4)
+            \\  -a, --assignee <name>        New assignee
+            \\  -d, --description <text>     New description
+            \\  -t, --type <type>            New issue type
+            \\  -o, --owner <name>           New owner
+            \\      --design <text>          Design notes
+            \\      --acceptance <text>      Acceptance criteria
+            \\      --notes <text>           Working notes
+            \\      --external-ref <ref>     External reference
+            \\      --due <date>             Due date (ISO 8601)
+            \\      --defer <date>           Defer until date (ISO 8601)
+            \\      --json                   Output as JSON
+            \\
+        );
         return;
     }
 
     const issue_id = res.positionals[0] orelse {
-        const stderr = std.fs.File.stderr().deprecatedWriter();
+        const stderr = io.stderr();
         try stderr.writeAll("Error: issue ID is required\nUsage: bees update <id> [options]\n");
         return error.MissingArgument;
     };
@@ -54,7 +79,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
     // Verify issue exists
     var existing = (try store.getIssue(allocator, issue_id)) orelse {
-        const stderr = std.fs.File.stderr().deprecatedWriter();
+        const stderr = io.stderr();
         try stderr.print("Error: issue '{s}' not found\n", .{issue_id});
         return error.NotFound;
     };
@@ -68,10 +93,16 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         .description = res.args.description,
         .issue_type = res.args.type,
         .owner = res.args.owner,
+        .design = res.args.design,
+        .acceptance_criteria = res.args.acceptance,
+        .notes = res.args.notes,
+        .external_ref = res.args.@"external-ref",
+        .due_at = res.args.due,
+        .defer_until = res.args.@"defer",
         .updated_at = timestamp.now(),
     });
 
-    const stdout = std.fs.File.stdout().deprecatedWriter();
+    const stdout = io.stdout();
     if (res.args.json != 0) {
         var json_buf: [4096]u8 = undefined;
         var json_w = io.JsonWriter.init(stdout, &json_buf);
