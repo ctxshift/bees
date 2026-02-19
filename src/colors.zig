@@ -46,9 +46,14 @@ pub fn typeColor(issue_type: []const u8) []const u8 {
     return ""; // task and others: default color
 }
 
+pub const arrow = "\xe2\x86\xb3"; // ↳
+pub const dot = "\xc2\xb7"; // ·
+pub const priority_dot = "\xe2\x97\x8f"; // ●
+
 pub fn statusIcon(status: []const u8) []const u8 {
     if (std.mem.eql(u8, status, "in_progress")) return "\xe2\x97\x90"; // ◐
-    if (std.mem.eql(u8, status, "closed")) return "\xe2\x97\x8f"; // ●
+    if (std.mem.eql(u8, status, "closed")) return "\xe2\x9c\x93"; // ✓
+    if (std.mem.eql(u8, status, "deferred")) return "\xe2\x97\x87"; // ◇
     return "\xe2\x97\x8b"; // ○
 }
 
