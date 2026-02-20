@@ -46,7 +46,9 @@ pub fn openDb(allocator: std.mem.Allocator) !sqlite.Database {
 
     // Seed issue_prefix from config.json if not set in DB
     var store = store_mod.Store.init(db);
-    if ((store.getConfigAlloc(allocator, "issue_prefix") catch null) == null) {
+    if (store.getConfigAlloc(allocator, "issue_prefix") catch null) |existing| {
+        allocator.free(existing);
+    } else {
         var bees_dir = std.fs.openDirAbsolute(bees_path, .{}) catch null;
         if (bees_dir) |*dir| {
             defer dir.close();
