@@ -730,39 +730,39 @@ fn writeDepIssueJson(
     cached_issues: []const store_mod.IssueResult,
 ) !void {
     // Try to find the related issue in the cached list
-    var title: []const u8 = "";
-    var status: []const u8 = "open";
-    var priority: i32 = 2;
-    var issue_type: []const u8 = "task";
-    var found = false;
-
     for (cached_issues) |ci| {
         if (std.mem.eql(u8, ci.id, related_id)) {
-            title = ci.title;
-            status = ci.status;
-            priority = ci.priority;
-            issue_type = ci.issue_type;
-            found = true;
-            break;
+            try writeDepEntryJson(allocator, buf, related_id, ci.title, ci.status, ci.priority, ci.issue_type, dep_type);
+            return;
         }
     }
 
-    // Fallback to DB lookup if not in cached list (e.g., filtered out)
-    if (!found) {
-        if (store.getIssue(allocator, related_id) catch null) |issue| {
-            defer {
-                var m = issue;
-                m.deinit(allocator);
-            }
-            title = issue.title;
-            status = issue.status;
-            priority = issue.priority;
-            issue_type = issue.issue_type;
+    // Fallback to DB lookup if not in cached list (e.g., child not in filtered results)
+    if (store.getIssue(allocator, related_id) catch null) |issue| {
+        defer {
+            var m = issue;
+            m.deinit(allocator);
         }
+        try writeDepEntryJson(allocator, buf, related_id, issue.title, issue.status, issue.priority, issue.issue_type, dep_type);
+        return;
     }
 
+    // Issue not found at all - write with empty defaults
+    try writeDepEntryJson(allocator, buf, related_id, "", "open", 2, "task", dep_type);
+}
+
+fn writeDepEntryJson(
+    allocator: std.mem.Allocator,
+    buf: *Buf,
+    id: []const u8,
+    title: []const u8,
+    status: []const u8,
+    priority: i32,
+    issue_type: []const u8,
+    dep_type: []const u8,
+) !void {
     try buf.appendSlice(allocator, "{\"id\":\"");
-    try buf.appendSlice(allocator, related_id);
+    try buf.appendSlice(allocator, id);
     try buf.appendSlice(allocator, "\",\"title\":");
     try appendJsonString(allocator, buf, title);
     try buf.appendSlice(allocator, ",\"status\":\"");
