@@ -108,7 +108,7 @@ fn writeReadyLine(
         // Issue ID
         try stdout.print("{s}{s}{s} ", .{ colors.dim, issue.id, colors.reset });
         // Priority
-        try stdout.print("[{s}\xe2\x97\x8f {s}{s}] ", .{ pcolor, priority_str, colors.reset });
+        try stdout.print("[{s}{s} {s}{s}] ", .{ pcolor, colors.priority_dot, priority_str, colors.reset });
         // Type
         try stdout.print("[{s}{s}{s}]", .{ tcolor, issue.issue_type, colors.reset });
         // Labels
@@ -134,7 +134,7 @@ fn writeReadyLine(
     } else {
         try stdout.print("{s} ", .{status_icon});
         try stdout.print("{s} ", .{issue.id});
-        try stdout.print("[\xe2\x97\x8f {s}] ", .{priority_str});
+        try stdout.print("[{s} {s}] ", .{ colors.priority_dot, priority_str });
         try stdout.print("[{s}]", .{issue.issue_type});
         if (issue_labels.len > 0) {
             try stdout.writeAll(" [");

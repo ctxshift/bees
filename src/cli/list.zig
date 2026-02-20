@@ -118,38 +118,60 @@ fn writeIssueLine(
     const status_icon = colors.statusIcon(issue.status);
 
     if (use_color) {
-        const scolor = colors.statusColor(issue.status);
-        const pcolor = colors.priorityColor(issue.priority);
-        const tcolor = colors.typeColor(issue.issue_type);
-
-        // Status icon
-        try stdout.print("{s}{s}{s} ", .{ scolor, status_icon, colors.reset });
-        // Issue ID
-        try stdout.print("{s}{s}{s} ", .{ colors.dim, issue.id, colors.reset });
-        // Priority
-        try stdout.print("[{s}\xe2\x97\x8f {s}{s}] ", .{ pcolor, priority_str, colors.reset });
-        // Type
-        try stdout.print("[{s}{s}{s}]", .{ tcolor, issue.issue_type, colors.reset });
-        // Labels
-        if (issue_labels.len > 0) {
-            try stdout.print(" [{s}", .{colors.label_color});
-            for (issue_labels, 0..) |label, i| {
-                if (i > 0) try stdout.writeAll(" ");
-                try stdout.writeAll(label);
+        const is_closed = std.mem.eql(u8, issue.status, "closed");
+        if (is_closed) {
+            // Dim the entire line for closed issues
+            try stdout.print("{s}{s} {s} [{s} {s}] [{s}]", .{
+                colors.status_closed,
+                status_icon, issue.id,
+                colors.priority_dot, priority_str,
+                issue.issue_type,
+            });
+            if (issue_labels.len > 0) {
+                try stdout.writeAll(" [");
+                for (issue_labels, 0..) |label, i| {
+                    if (i > 0) try stdout.writeAll(" ");
+                    try stdout.writeAll(label);
+                }
+                try stdout.writeAll("]");
             }
-            try stdout.print("{s}]", .{colors.reset});
+            try stdout.print(" - {s}", .{issue.title});
+            try writeDeps(stdout, deps, blocks, false);
+            try stdout.print("{s}", .{colors.reset});
+        } else {
+            const scolor = colors.statusColor(issue.status);
+            const pcolor = colors.priorityColor(issue.priority);
+            const tcolor = colors.typeColor(issue.issue_type);
+
+            // Status icon
+            try stdout.print("{s}{s}{s} ", .{ scolor, status_icon, colors.reset });
+            // Issue ID
+            try stdout.print("{s}{s}{s} ", .{ colors.dim, issue.id, colors.reset });
+            // Priority
+            try stdout.print("[{s}{s} {s}{s}] ", .{ pcolor, colors.priority_dot, priority_str, colors.reset });
+            // Type
+            try stdout.print("[{s}{s}{s}]", .{ tcolor, issue.issue_type, colors.reset });
+            // Labels
+            if (issue_labels.len > 0) {
+                try stdout.print(" [{s}", .{colors.label_color});
+                for (issue_labels, 0..) |label, i| {
+                    if (i > 0) try stdout.writeAll(" ");
+                    try stdout.writeAll(label);
+                }
+                try stdout.print("{s}]", .{colors.reset});
+            }
+            // Title
+            try stdout.print(" - {s}", .{issue.title});
+            // Dependency info
+            try writeDeps(stdout, deps, blocks, true);
         }
-        // Title
-        try stdout.print(" - {s}", .{issue.title});
-        // Dependency info
-        try writeDeps(stdout, deps, blocks, true);
     } else {
         // Status icon
         try stdout.print("{s} ", .{status_icon});
         // Issue ID
         try stdout.print("{s} ", .{issue.id});
         // Priority
-        try stdout.print("[\xe2\x97\x8f {s}] ", .{priority_str});
+        try stdout.print("[{s} {s}] ", .{ colors.priority_dot, priority_str });
         // Type
         try stdout.print("[{s}]", .{issue.issue_type});
         // Labels

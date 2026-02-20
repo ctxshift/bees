@@ -85,6 +85,9 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
     // --- Human-readable output matching beads format ---
 
+    const use_color = colors.shouldUseColor();
+    const c = ColorCtx.init(use_color);
+
     var type_buf: [16]u8 = undefined;
     const type_upper = asciiUpper(issue.issue_type, &type_buf);
     var status_buf: [16]u8 = undefined;
@@ -92,20 +95,27 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
     const status_icon = colors.statusIcon(issue.status);
     const priority_str = priorityStr(issue.priority);
 
+    const scolor = c.wrap(colors.statusColor(issue.status));
+    const tcolor = c.wrap(colors.typeColor(issue.issue_type));
+    const pcolor = c.wrap(colors.priorityColor(issue.priority));
+    const r = c.wrap(colors.reset);
+    const b = c.wrap(colors.bold);
+    const d = c.wrap(colors.dim);
+
     // Header line: ○ bees-4 [EPIC] · Title   [● P2 · OPEN]
-    try stdout.print("\n{s} {s} [{s}] {s} {s}   [{s} {s} {s} {s}]\n", .{
-        status_icon,
-        issue.id,
-        type_upper,
-        colors.dot,
+    try stdout.print("\n{s}{s}{s} {s}{s}{s} {s}[{s}]{s} {s}{s}{s} {s}   [{s}{s}{s} {s}{s}{s} {s}{s}{s} {s}]\n", .{
+        scolor,   status_icon, r,
+        d,        issue.id,    r,
+        tcolor,   type_upper,  r,
+        d,        colors.dot,  r,
         issue.title,
-        colors.priority_dot,
-        priority_str,
-        colors.dot,
+        pcolor,   colors.priority_dot, r,
+        pcolor,   priority_str,        r,
+        d,        colors.dot,          r,
         status_upper,
     });
 
-    // Metadata line: Owner: X · Assignee: Y · Type: type
+    // Metadata line: Assignee: X · Owner: Y · Type: type
     {
         var has_prev = false;
         if (issue.assignee) |v| {
@@ -113,23 +123,23 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             has_prev = true;
         }
         if (issue.owner) |v| {
-            if (has_prev) try stdout.print(" {s} ", .{colors.dot});
+            if (has_prev) try stdout.print(" {s}{s}{s} ", .{ d, colors.dot, r });
             try stdout.print("Owner: {s}", .{v});
             has_prev = true;
         }
-        if (has_prev) try stdout.print(" {s} ", .{colors.dot});
+        if (has_prev) try stdout.print(" {s}{s}{s} ", .{ d, colors.dot, r });
         try stdout.print("Type: {s}\n", .{issue.issue_type});
     }
 
     // Date line: Created: YYYY-MM-DD · Updated: YYYY-MM-DD
-    try stdout.print("Created: {s} {s} Updated: {s}\n", .{
+    try stdout.print("Created: {s} {s}{s}{s} Updated: {s}\n", .{
         shortDate(issue.created_at),
-        colors.dot,
+        d, colors.dot, r,
         shortDate(issue.updated_at),
     });
     if (issue.closed_at) |v| {
         try stdout.print("Closed: {s}", .{shortDate(v)});
-        if (issue.close_reason) |r| try stdout.print(" ({s})", .{r});
+        if (issue.close_reason) |rr| try stdout.print(" ({s})", .{rr});
         try stdout.writeByte('\n');
     }
     if (issue.due_at) |v| try stdout.print("Due: {s}\n", .{shortDate(v)});
@@ -138,31 +148,30 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
     // Content sections
     if (issue.description) |v| {
-        try stdout.print("\nDESCRIPTION\n{s}\n", .{v});
+        try stdout.print("\n{s}DESCRIPTION{s}\n{s}\n", .{ b, r, v });
     }
     if (issue.design) |v| {
-        try stdout.print("\nDESIGN\n{s}\n", .{v});
+        try stdout.print("\n{s}DESIGN{s}\n{s}\n", .{ b, r, v });
     }
     if (issue.acceptance_criteria) |v| {
-        try stdout.print("\nACCEPTANCE CRITERIA\n{s}\n", .{v});
+        try stdout.print("\n{s}ACCEPTANCE CRITERIA{s}\n{s}\n", .{ b, r, v });
     }
     if (issue.notes) |v| {
-        try stdout.print("\nNOTES\n{s}\n", .{v});
+        try stdout.print("\n{s}NOTES{s}\n{s}\n", .{ b, r, v });
     }
 
     // Labels
     if (labels.len > 0) {
-        try stdout.writeAll("\nLABELS: ");
+        try stdout.print("\n{s}LABELS:{s} {s}", .{ b, r, d });
         for (labels, 0..) |label, i| {
             if (i > 0) try stdout.writeAll(", ");
             try stdout.writeAll(label);
         }
-        try stdout.writeByte('\n');
+        try stdout.print("{s}\n", .{r});
     }
 
     // Dependencies (what this issue depends on)
     if (deps.len > 0) {
-        // Separate parent from blocking deps
         var has_parent = false;
         var has_blocking = false;
         for (deps) |dep| {
@@ -173,7 +182,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             }
         }
         if (has_parent) {
-            try stdout.writeAll("\nPARENT\n");
+            try stdout.print("\n{s}PARENT{s}\n", .{ b, r });
             for (deps) |dep| {
                 if (std.mem.eql(u8, dep.dep_type, "parent-child")) {
                     try stdout.print("  {s} {s}\n", .{ colors.arrow, dep.depends_on_id });
@@ -181,7 +190,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             }
         }
         if (has_blocking) {
-            try stdout.writeAll("\nDEPENDS ON\n");
+            try stdout.print("\n{s}DEPENDS ON{s}\n", .{ b, r });
             for (deps) |dep| {
                 if (!std.mem.eql(u8, dep.dep_type, "parent-child")) {
                     try stdout.print("  {s} {s} ({s})\n", .{ colors.arrow, dep.depends_on_id, dep.dep_type });
@@ -202,26 +211,26 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         }
 
         if (has_children) {
-            try stdout.writeAll("\nCHILDREN\n");
+            try stdout.print("\n{s}CHILDREN{s}\n", .{ b, r });
             for (dependents) |dep| {
                 if (std.mem.eql(u8, dep.dep_type, "parent-child")) {
-                    try writeDepLine(allocator, stdout, &store, dep.issue_id);
+                    try writeDepLine(allocator, stdout, &store, dep.issue_id, use_color);
                 }
             }
         }
         if (has_blocks) {
-            try stdout.writeAll("\nBLOCKS\n");
+            try stdout.print("\n{s}BLOCKS{s}\n", .{ b, r });
             for (dependents) |dep| {
                 if (std.mem.eql(u8, dep.dep_type, "blocks")) {
-                    try writeDepLine(allocator, stdout, &store, dep.issue_id);
+                    try writeDepLine(allocator, stdout, &store, dep.issue_id, use_color);
                 }
             }
         }
         if (has_related) {
-            try stdout.writeAll("\nRELATED\n");
+            try stdout.print("\n{s}RELATED{s}\n", .{ b, r });
             for (dependents) |dep| {
                 if (!std.mem.eql(u8, dep.dep_type, "parent-child") and !std.mem.eql(u8, dep.dep_type, "blocks")) {
-                    try writeDepLine(allocator, stdout, &store, dep.issue_id);
+                    try writeDepLine(allocator, stdout, &store, dep.issue_id, use_color);
                 }
             }
         }
@@ -229,10 +238,10 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
     // Comments
     if (comments.len > 0) {
-        try stdout.writeAll("\nCOMMENTS\n");
+        try stdout.print("\n{s}COMMENTS{s}\n", .{ b, r });
         for (comments) |comment| {
             const author = comment.author orelse "anonymous";
-            try stdout.print("  [{s}] {s}: {s}\n", .{ shortDate(comment.created_at), author, comment.text });
+            try stdout.print("  {s}[{s}]{s} {s}: {s}\n", .{ d, shortDate(comment.created_at), r, author, comment.text });
         }
     }
 
@@ -240,9 +249,9 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 }
 
 /// Write a child/dependent line: `  ↳ ✓ bees-1: Title ● P2`
-fn writeDepLine(allocator: std.mem.Allocator, stdout: anytype, store: *store_mod.Store, dep_id: []const u8) !void {
+/// Closed items render entirely dimmed; open items get colored icon + priority.
+fn writeDepLine(allocator: std.mem.Allocator, stdout: anytype, store: *store_mod.Store, dep_id: []const u8, use_color: bool) !void {
     var child = (try store.getIssue(allocator, dep_id)) orelse {
-        // Issue not found (deleted?), show just the ID
         try stdout.print("  {s} {s}\n", .{ colors.arrow, dep_id });
         return;
     };
@@ -250,14 +259,31 @@ fn writeDepLine(allocator: std.mem.Allocator, stdout: anytype, store: *store_mod
 
     const icon = colors.statusIcon(child.status);
     const p_str = priorityStr(child.priority);
-    try stdout.print("  {s} {s} {s}: {s} {s} {s}\n", .{
-        colors.arrow,
-        icon,
-        child.id,
-        child.title,
-        colors.priority_dot,
-        p_str,
-    });
+    const is_closed = std.mem.eql(u8, child.status, "closed");
+
+    if (use_color and is_closed) {
+        // Entire line dimmed for closed issues
+        try stdout.print("  {s}{s} {s} {s}: {s} {s} {s}{s}\n", .{
+            colors.dim,
+            colors.arrow, icon, child.id, child.title,
+            colors.priority_dot, p_str,
+            colors.reset,
+        });
+    } else if (use_color) {
+        const scolor = colors.statusColor(child.status);
+        const pcolor = colors.priorityColor(child.priority);
+        try stdout.print("  {s} {s}{s}{s} {s}: {s} {s}{s} {s}{s}\n", .{
+            colors.arrow,
+            scolor, icon, colors.reset,
+            child.id, child.title,
+            pcolor, colors.priority_dot, p_str, colors.reset,
+        });
+    } else {
+        try stdout.print("  {s} {s} {s}: {s} {s} {s}\n", .{
+            colors.arrow, icon, child.id, child.title,
+            colors.priority_dot, p_str,
+        });
+    }
 }
 
 fn priorityStr(priority: i32) []const u8 {
@@ -285,3 +311,17 @@ fn asciiUpper(s: []const u8, buf: []u8) []const u8 {
     }
     return buf[0..len];
 }
+
+/// Helper to conditionally emit ANSI codes based on TTY detection.
+const ColorCtx = struct {
+    use_color: bool,
+
+    fn init(use_color: bool) ColorCtx {
+        return .{ .use_color = use_color };
+    }
+
+    /// Return the ANSI code if color is enabled, empty string otherwise.
+    fn wrap(self: ColorCtx, code: []const u8) []const u8 {
+        return if (self.use_color) code else "";
+    }
+};
