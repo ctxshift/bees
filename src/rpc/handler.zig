@@ -205,16 +205,16 @@ fn handleShow(allocator: std.mem.Allocator, store: *Store, args: ?std.json.Value
         allocator.free(deps);
     }
 
-    const comments = store.listComments(allocator, id) catch &[_]store_mod.CommentResult{};
+    const dependents = store.listDependents(allocator, id) catch &[_]store_mod.DependentResult{};
     defer {
-        for (comments) |*c| @constCast(c).deinit(allocator);
-        allocator.free(comments);
+        for (dependents) |*d| @constCast(d).deinit(allocator);
+        allocator.free(dependents);
     }
 
     var buf = Buf{};
     errdefer buf.deinit(allocator);
 
-    try writeHydratedShowJson(allocator, &buf, &issue, labels, deps, comments);
+    try writeHydratedShowJson(allocator, &buf, &issue, labels, deps, dependents, store);
 
     return try buf.toOwnedSlice(allocator);
 }
@@ -678,7 +678,8 @@ fn writeHydratedShowJson(
     issue: *const store_mod.IssueResult,
     labels: []const []const u8,
     deps: []const store_mod.DepResult,
-    comments: []const store_mod.CommentResult,
+    dependents: []const store_mod.DependentResult,
+    store: *Store,
 ) !void {
     try writeIssueJson(allocator, buf, issue);
     // Remove trailing '}'
@@ -692,31 +693,70 @@ fn writeHydratedShowJson(
     }
     try buf.append(allocator, ']');
 
-    // Add dependencies
+    // Add hydrated dependencies (what this issue depends on)
     try buf.appendSlice(allocator, ",\"dependencies\":[");
     for (deps, 0..) |*d, i| {
         if (i > 0) try buf.append(allocator, ',');
-        try buf.appendSlice(allocator, "{\"issue_id\":\"");
-        try buf.appendSlice(allocator, issue.id);
-        try buf.appendSlice(allocator, "\",\"depends_on_id\":\"");
-        try buf.appendSlice(allocator, d.depends_on_id);
-        try buf.appendSlice(allocator, "\",\"type\":\"");
-        try buf.appendSlice(allocator, d.dep_type);
-        try buf.appendSlice(allocator, "\",\"created_at\":\"");
-        try buf.appendSlice(allocator, d.created_at);
-        try buf.appendSlice(allocator, "\"}");
+        try writeHydratedDepJson(allocator, buf, d.depends_on_id, d.dep_type, store);
     }
     try buf.append(allocator, ']');
 
-    // Add comments
-    try buf.appendSlice(allocator, ",\"comments\":[");
-    for (comments, 0..) |*c, i| {
+    // Add hydrated dependents (what depends on this issue)
+    try buf.appendSlice(allocator, ",\"dependents\":[");
+    for (dependents, 0..) |*d, i| {
         if (i > 0) try buf.append(allocator, ',');
-        try appendCommentJson(allocator, buf, c);
+        try writeHydratedDepJson(allocator, buf, d.issue_id, d.dep_type, store);
     }
     try buf.append(allocator, ']');
 
     try buf.append(allocator, '}');
+}
+
+/// Write a fully hydrated dependency/dependent entry matching the beads show format.
+/// Includes id, title, description, status, priority, issue_type, created_at, updated_at,
+/// closed_at, labels, and dependency_type.
+fn writeHydratedDepJson(
+    allocator: std.mem.Allocator,
+    buf: *Buf,
+    related_id: []const u8,
+    dep_type: []const u8,
+    store: *Store,
+) !void {
+    if (store.getIssue(allocator, related_id) catch null) |issue| {
+        defer {
+            var m = issue;
+            m.deinit(allocator);
+        }
+        const dep_labels = store.listLabels(allocator, related_id) catch &[_][]const u8{};
+        defer {
+            for (dep_labels) |l| allocator.free(l);
+            allocator.free(dep_labels);
+        }
+
+        // Write full issue JSON, then replace closing '}' with extra fields
+        try writeIssueJson(allocator, buf, &issue);
+        _ = buf.pop();
+
+        // Add labels
+        try buf.appendSlice(allocator, ",\"labels\":[");
+        for (dep_labels, 0..) |l, i| {
+            if (i > 0) try buf.append(allocator, ',');
+            try appendJsonString(allocator, buf, l);
+        }
+        try buf.append(allocator, ']');
+
+        // Add dependency_type
+        try buf.appendSlice(allocator, ",\"dependency_type\":\"");
+        try buf.appendSlice(allocator, dep_type);
+        try buf.appendSlice(allocator, "\"}");
+    } else {
+        // Issue not found - minimal entry
+        try buf.appendSlice(allocator, "{\"id\":\"");
+        try buf.appendSlice(allocator, related_id);
+        try buf.appendSlice(allocator, "\",\"dependency_type\":\"");
+        try buf.appendSlice(allocator, dep_type);
+        try buf.appendSlice(allocator, "\"}");
+    }
 }
 
 /// Write a dependency entry with the related issue's details (id, title, status, priority, type, dependency_type).

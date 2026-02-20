@@ -77,7 +77,61 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         var json_buf: [4096]u8 = undefined;
         var json_w = io.JsonWriter.init(stdout, &json_buf);
         var jw = json_w.stringify();
-        try issue.jsonStringify(&jw);
+
+        // Write issue fields (without closing the object)
+        try issue.jsonStringifyOpen(&jw);
+
+        // Labels
+        try jw.objectField("labels");
+        try jw.beginArray();
+        for (labels) |l| try jw.write(l);
+        try jw.endArray();
+
+        // Dependencies (hydrated)
+        try jw.objectField("dependencies");
+        try jw.beginArray();
+        for (deps) |dep| {
+            var dep_issue = (try store.getIssue(allocator, dep.depends_on_id)) orelse continue;
+            defer dep_issue.deinit(allocator);
+            const dep_labels = store.listLabels(allocator, dep.depends_on_id) catch &[_][]const u8{};
+            defer {
+                for (dep_labels) |l| allocator.free(l);
+                allocator.free(dep_labels);
+            }
+            try dep_issue.jsonStringifyOpen(&jw);
+            try jw.objectField("labels");
+            try jw.beginArray();
+            for (dep_labels) |l| try jw.write(l);
+            try jw.endArray();
+            try jw.objectField("dependency_type");
+            try jw.write(dep.dep_type);
+            try jw.endObject();
+        }
+        try jw.endArray();
+
+        // Dependents (hydrated)
+        try jw.objectField("dependents");
+        try jw.beginArray();
+        for (dependents) |dep| {
+            var dep_issue = (try store.getIssue(allocator, dep.issue_id)) orelse continue;
+            defer dep_issue.deinit(allocator);
+            const dep_labels = store.listLabels(allocator, dep.issue_id) catch &[_][]const u8{};
+            defer {
+                for (dep_labels) |l| allocator.free(l);
+                allocator.free(dep_labels);
+            }
+            try dep_issue.jsonStringifyOpen(&jw);
+            try jw.objectField("labels");
+            try jw.beginArray();
+            for (dep_labels) |l| try jw.write(l);
+            try jw.endArray();
+            try jw.objectField("dependency_type");
+            try jw.write(dep.dep_type);
+            try jw.endObject();
+        }
+        try jw.endArray();
+
+        try jw.endObject();
         try jw.writer.writeByte('\n');
         try jw.writer.flush();
         return;

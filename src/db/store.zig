@@ -748,6 +748,13 @@ pub const IssueResult = struct {
     }
 
     pub fn jsonStringify(self: *const IssueResult, jw: anytype) !void {
+        try self.jsonStringifyOpen(jw);
+        try jw.endObject();
+    }
+
+    /// Write all issue fields as JSON object fields, leaving the object open
+    /// (no endObject) so callers can append extra fields before closing.
+    pub fn jsonStringifyOpen(self: *const IssueResult, jw: anytype) !void {
         try jw.beginObject();
         try jw.objectField("id");
         try jw.write(self.id);
@@ -831,7 +838,6 @@ pub const IssueResult = struct {
             try jw.objectField("notes");
             try jw.write(v);
         }
-        try jw.endObject();
     }
 };
 

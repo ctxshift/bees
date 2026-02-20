@@ -46,7 +46,19 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         var jw = json_w.stringify();
         try jw.beginArray();
         for (issues) |*issue| {
-            try issue.jsonStringify(&jw);
+            try issue.jsonStringifyOpen(&jw);
+
+            const issue_labels = store.listLabels(allocator, issue.id) catch &[_][]const u8{};
+            defer {
+                for (issue_labels) |l| allocator.free(l);
+                allocator.free(issue_labels);
+            }
+            try jw.objectField("labels");
+            try jw.beginArray();
+            for (issue_labels) |l| try jw.write(l);
+            try jw.endArray();
+
+            try jw.endObject();
         }
         try jw.endArray();
         try jw.writer.writeByte('\n');

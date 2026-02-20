@@ -58,7 +58,44 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         var jw = json_w.stringify();
         try jw.beginArray();
         for (issues) |*issue| {
-            try issue.jsonStringify(&jw);
+            try issue.jsonStringifyOpen(&jw);
+
+            // Labels
+            const issue_labels = store.listLabels(allocator, issue.id) catch &[_][]const u8{};
+            defer {
+                for (issue_labels) |l| allocator.free(l);
+                allocator.free(issue_labels);
+            }
+            try jw.objectField("labels");
+            try jw.beginArray();
+            for (issue_labels) |l| try jw.write(l);
+            try jw.endArray();
+
+            // Dependency/dependent/comment counts
+            const dep_count = store.listDeps(allocator, issue.id) catch &[_]store_mod.DepResult{};
+            defer {
+                for (dep_count) |*d| d.deinit(allocator);
+                allocator.free(dep_count);
+            }
+            const dependent_count = store.listDependents(allocator, issue.id) catch &[_]store_mod.DependentResult{};
+            defer {
+                for (dependent_count) |*d| d.deinit(allocator);
+                allocator.free(dependent_count);
+            }
+            const comment_count = store.listComments(allocator, issue.id) catch &[_]store_mod.CommentResult{};
+            defer {
+                for (comment_count) |*c| @constCast(c).deinit(allocator);
+                allocator.free(comment_count);
+            }
+
+            try jw.objectField("dependency_count");
+            try jw.write(dep_count.len);
+            try jw.objectField("dependent_count");
+            try jw.write(dependent_count.len);
+            try jw.objectField("comment_count");
+            try jw.write(comment_count.len);
+
+            try jw.endObject();
         }
         try jw.endArray();
         try jw.writer.writeByte('\n');
