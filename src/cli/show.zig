@@ -95,23 +95,21 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
     const status_icon = colors.statusIcon(issue.status);
     const priority_str = priorityStr(issue.priority);
 
-    const scolor = c.wrap(colors.statusColor(issue.status));
     const tcolor = c.wrap(colors.typeColor(issue.issue_type));
     const pcolor = c.wrap(colors.priorityColor(issue.priority));
+    const accent = c.wrap(colors.header);
     const r = c.wrap(colors.reset);
     const b = c.wrap(colors.bold);
-    const d = c.wrap(colors.dim);
 
-    // Header line: ○ bees-4 [EPIC] · Title   [● P2 · OPEN]
-    try stdout.print("\n{s}{s}{s} {s}{s}{s} {s}[{s}]{s} {s}{s}{s} {s}   [{s}{s}{s} {s}{s}{s} {s}{s}{s} {s}]\n", .{
-        scolor,   status_icon, r,
-        d,        issue.id,    r,
-        tcolor,   type_upper,  r,
-        d,        colors.dot,  r,
+    // Header line: ○ id [EPIC] · Title   [● P2 · OPEN]
+    try stdout.print("\n{s} {s}{s}{s} {s}[{s}]{s} {s} {s}   [{s}{s} {s}{s} {s} {s}]\n", .{
+        status_icon,
+        accent,      issue.id,            r,
+        tcolor,      type_upper,          r,
+        colors.dot,
         issue.title,
-        pcolor,   colors.priority_dot, r,
-        pcolor,   priority_str,        r,
-        d,        colors.dot,          r,
+        pcolor,      colors.priority_dot, priority_str, r,
+        colors.dot,
         status_upper,
     });
 
@@ -123,18 +121,18 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             has_prev = true;
         }
         if (issue.owner) |v| {
-            if (has_prev) try stdout.print(" {s}{s}{s} ", .{ d, colors.dot, r });
+            if (has_prev) try stdout.print(" {s} ", .{colors.dot});
             try stdout.print("Owner: {s}", .{v});
             has_prev = true;
         }
-        if (has_prev) try stdout.print(" {s}{s}{s} ", .{ d, colors.dot, r });
-        try stdout.print("Type: {s}\n", .{issue.issue_type});
+        if (has_prev) try stdout.print(" {s} ", .{colors.dot});
+        try stdout.print("Type: {s}{s}{s}\n", .{ tcolor, issue.issue_type, r });
     }
 
     // Date line: Created: YYYY-MM-DD · Updated: YYYY-MM-DD
-    try stdout.print("Created: {s} {s}{s}{s} Updated: {s}\n", .{
+    try stdout.print("Created: {s} {s} Updated: {s}\n", .{
         shortDate(issue.created_at),
-        d, colors.dot, r,
+        colors.dot,
         shortDate(issue.updated_at),
     });
     if (issue.closed_at) |v| {
@@ -162,12 +160,12 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
     // Labels
     if (labels.len > 0) {
-        try stdout.print("\n{s}LABELS:{s} {s}", .{ b, r, d });
+        try stdout.print("\n{s}LABELS:{s} ", .{ b, r });
         for (labels, 0..) |label, i| {
             if (i > 0) try stdout.writeAll(", ");
             try stdout.writeAll(label);
         }
-        try stdout.print("{s}\n", .{r});
+        try stdout.writeByte('\n');
     }
 
     // Dependencies (what this issue depends on)
@@ -241,7 +239,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         try stdout.print("\n{s}COMMENTS{s}\n", .{ b, r });
         for (comments) |comment| {
             const author = comment.author orelse "anonymous";
-            try stdout.print("  {s}[{s}]{s} {s}: {s}\n", .{ d, shortDate(comment.created_at), r, author, comment.text });
+            try stdout.print("  [{s}] {s}: {s}\n", .{ shortDate(comment.created_at), author, comment.text });
         }
     }
 
@@ -262,19 +260,17 @@ fn writeDepLine(allocator: std.mem.Allocator, stdout: anytype, store: *store_mod
     const is_closed = std.mem.eql(u8, child.status, "closed");
 
     if (use_color and is_closed) {
-        // Entire line dimmed for closed issues
-        try stdout.print("  {s}{s} {s} {s}: {s} {s} {s}{s}\n", .{
-            colors.dim,
-            colors.arrow, icon, child.id, child.title,
-            colors.priority_dot, p_str,
-            colors.reset,
+        // Closed: dim ID, title, priority individually (icons stay default)
+        try stdout.print("  {s} {s} {s}{s}{s}: {s}{s}{s} {s}{s} {s}{s}\n", .{
+            colors.arrow, icon,
+            colors.dim, child.id,         colors.reset,
+            colors.dim, child.title,      colors.reset,
+            colors.dim, colors.priority_dot, p_str, colors.reset,
         });
     } else if (use_color) {
-        const scolor = colors.statusColor(child.status);
         const pcolor = colors.priorityColor(child.priority);
-        try stdout.print("  {s} {s}{s}{s} {s}: {s} {s}{s} {s}{s}\n", .{
-            colors.arrow,
-            scolor, icon, colors.reset,
+        try stdout.print("  {s} {s} {s}: {s} {s}{s} {s}{s}\n", .{
+            colors.arrow, icon,
             child.id, child.title,
             pcolor, colors.priority_dot, p_str, colors.reset,
         });

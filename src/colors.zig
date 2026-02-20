@@ -9,7 +9,7 @@ pub const header = "\x1b[38;2;89;194;255m"; // accent #59c2ff
 // Priority colors (P0/P1 colored, P2 subtle, P3/P4 neutral)
 const p0 = "\x1b[1m\x1b[38;2;240;113;120m"; // bold red #f07178
 const p1 = "\x1b[38;2;255;143;64m"; // orange #ff8f40
-const p2 = "\x1b[38;2;230;180;80m"; // gold #e6b450
+const p2 = "\x1b[38;2;230;179;80m"; // gold #e6b350
 
 // Type colors (only bug and epic are colored)
 const bug = "\x1b[38;2;242;109;120m"; // red #f26d78

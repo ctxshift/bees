@@ -59,101 +59,37 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
         const use_color = colors.shouldUseColor();
 
-        for (issues) |issue| {
-            const issue_labels = store.listLabels(allocator, issue.id) catch &.{};
-            defer {
-                for (issue_labels) |l| allocator.free(l);
-                allocator.free(issue_labels);
-            }
-
-            // Ready issues have no blockers, but may block others
-            const blocks_list = store.listBlocks(allocator, issue.id) catch &.{};
-            defer {
-                for (blocks_list) |b| allocator.free(b);
-                allocator.free(blocks_list);
-            }
-
-            try writeReadyLine(stdout, issue, issue_labels, blocks_list, use_color);
+        // Header: 📋 Ready work (N issues with no blockers):
+        if (use_color) {
+            try stdout.print("\n{s}\xf0\x9f\x93\x8b{s} Ready work ({d} issues with no blockers):\n\n", .{
+                colors.header, colors.reset, issues.len,
+            });
+        } else {
+            try stdout.print("\n\xf0\x9f\x93\x8b Ready work ({d} issues with no blockers):\n\n", .{issues.len});
         }
 
-        try stdout.print("\n{d} ready issue(s)\n", .{issues.len});
-    }
-}
+        for (issues, 0..) |issue, idx| {
+            const priority_str: []const u8 = switch (issue.priority) {
+                0 => "P0",
+                1 => "P1",
+                2 => "P2",
+                3 => "P3",
+                4 => "P4",
+                else => "P?",
+            };
 
-fn writeReadyLine(
-    stdout: anytype,
-    issue: store_mod.IssueResult,
-    issue_labels: []const []const u8,
-    blocks: []const []const u8,
-    use_color: bool,
-) !void {
-    const priority_str: []const u8 = switch (issue.priority) {
-        0 => "P0",
-        1 => "P1",
-        2 => "P2",
-        3 => "P3",
-        4 => "P4",
-        else => "P?",
-    };
+            const pcolor = if (use_color) colors.priorityColor(issue.priority) else "";
+            const tcolor = if (use_color) colors.typeColor(issue.issue_type) else "";
+            const r = if (use_color) colors.reset else "";
 
-    const status_icon = colors.statusIcon(issue.status);
-
-    if (use_color) {
-        const scolor = colors.statusColor(issue.status);
-        const pcolor = colors.priorityColor(issue.priority);
-        const tcolor = colors.typeColor(issue.issue_type);
-
-        // Status icon
-        try stdout.print("{s}{s}{s} ", .{ scolor, status_icon, colors.reset });
-        // Issue ID
-        try stdout.print("{s}{s}{s} ", .{ colors.dim, issue.id, colors.reset });
-        // Priority
-        try stdout.print("[{s}{s} {s}{s}] ", .{ pcolor, colors.priority_dot, priority_str, colors.reset });
-        // Type
-        try stdout.print("[{s}{s}{s}]", .{ tcolor, issue.issue_type, colors.reset });
-        // Labels
-        if (issue_labels.len > 0) {
-            try stdout.print(" [{s}", .{colors.label_color});
-            for (issue_labels, 0..) |label, i| {
-                if (i > 0) try stdout.writeAll(" ");
-                try stdout.writeAll(label);
-            }
-            try stdout.print("{s}]", .{colors.reset});
-        }
-        // Title
-        try stdout.print(" - {s}", .{issue.title});
-        // Blocks info (ready issues are never blocked, but may block others)
-        if (blocks.len > 0) {
-            try stdout.print(" {s}(blocks: ", .{colors.blocks_color});
-            for (blocks, 0..) |id, i| {
-                if (i > 0) try stdout.writeAll(", ");
-                try stdout.writeAll(id);
-            }
-            try stdout.print("){s}", .{colors.reset});
-        }
-    } else {
-        try stdout.print("{s} ", .{status_icon});
-        try stdout.print("{s} ", .{issue.id});
-        try stdout.print("[{s} {s}] ", .{ colors.priority_dot, priority_str });
-        try stdout.print("[{s}]", .{issue.issue_type});
-        if (issue_labels.len > 0) {
-            try stdout.writeAll(" [");
-            for (issue_labels, 0..) |label, i| {
-                if (i > 0) try stdout.writeAll(" ");
-                try stdout.writeAll(label);
-            }
-            try stdout.writeAll("]");
-        }
-        try stdout.print(" - {s}", .{issue.title});
-        if (blocks.len > 0) {
-            try stdout.writeAll(" (blocks: ");
-            for (blocks, 0..) |id, i| {
-                if (i > 0) try stdout.writeAll(", ");
-                try stdout.writeAll(id);
-            }
-            try stdout.writeAll(")");
+            // N. [● P2] [type] id: title
+            try stdout.print("{d}. [{s}{s} {s}{s}] [{s}{s}{s}] {s}: {s}\n", .{
+                idx + 1,
+                pcolor, colors.priority_dot, priority_str, r,
+                tcolor, issue.issue_type,                  r,
+                issue.id,
+                issue.title,
+            });
         }
     }
-
-    try stdout.writeAll("\n");
 }

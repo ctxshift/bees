@@ -93,8 +93,6 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
 
             try writeIssueLine(stdout, issue, issue_labels, deps, blocks, use_color);
         }
-
-        try stdout.print("\n{d} issue(s)\n", .{issues.len});
     }
 }
 
@@ -139,26 +137,25 @@ fn writeIssueLine(
             try writeDeps(stdout, deps, blocks, false);
             try stdout.print("{s}", .{colors.reset});
         } else {
-            const scolor = colors.statusColor(issue.status);
             const pcolor = colors.priorityColor(issue.priority);
             const tcolor = colors.typeColor(issue.issue_type);
 
             // Status icon
-            try stdout.print("{s}{s}{s} ", .{ scolor, status_icon, colors.reset });
+            try stdout.print("{s} ", .{status_icon});
             // Issue ID
-            try stdout.print("{s}{s}{s} ", .{ colors.dim, issue.id, colors.reset });
+            try stdout.print("{s} ", .{issue.id});
             // Priority
             try stdout.print("[{s}{s} {s}{s}] ", .{ pcolor, colors.priority_dot, priority_str, colors.reset });
             // Type
             try stdout.print("[{s}{s}{s}]", .{ tcolor, issue.issue_type, colors.reset });
             // Labels
             if (issue_labels.len > 0) {
-                try stdout.print(" [{s}", .{colors.label_color});
+                try stdout.writeAll(" [");
                 for (issue_labels, 0..) |label, i| {
                     if (i > 0) try stdout.writeAll(" ");
                     try stdout.writeAll(label);
                 }
-                try stdout.print("{s}]", .{colors.reset});
+                try stdout.writeAll("]");
             }
             // Title
             try stdout.print(" - {s}", .{issue.title});
