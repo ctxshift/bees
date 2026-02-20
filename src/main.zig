@@ -2,6 +2,8 @@ const std = @import("std");
 const sqlite = @import("sqlite");
 const connection = @import("db/connection.zig");
 const schema = @import("db/schema.zig");
+const store_mod = @import("db/store.zig");
+const config_mod = @import("export/config.zig");
 const init_cmd = @import("cli/init.zig");
 const create_cmd = @import("cli/create.zig");
 const list_cmd = @import("cli/list.zig");
@@ -42,6 +44,20 @@ pub fn openDb(allocator: std.mem.Allocator) !sqlite.Database {
         return err;
     };
 
+    // Seed issue_prefix from config.json if not set in DB
+    var store = store_mod.Store.init(db);
+    if ((store.getConfigAlloc(allocator, "issue_prefix") catch null) == null) {
+        var bees_dir = std.fs.openDirAbsolute(bees_path, .{}) catch null;
+        if (bees_dir) |*dir| {
+            defer dir.close();
+            const config = config_mod.read(dir.*, allocator) catch config_mod.Config{};
+            defer @constCast(&config).deinit(allocator);
+            if (config.issue_prefix) |prefix| {
+                store.setConfig("issue_prefix", prefix) catch {};
+            }
+        }
+    }
+
     return db;
 }
 
@@ -69,7 +85,17 @@ pub fn findBeesDir(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 pub fn main() void {
-    run() catch std.process.exit(1);
+    run() catch |err| {
+        switch (err) {
+            // User-facing errors that already printed a message
+            error.NotFound, error.MissingArgument => std.process.exit(1),
+            else => {
+                const stderr = std.fs.File.stderr().deprecatedWriter();
+                stderr.print("Error: {s}\n", .{@errorName(err)}) catch {};
+                std.process.exit(1);
+            },
+        }
+    };
 }
 
 fn run() !void {
