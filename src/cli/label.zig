@@ -54,6 +54,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         };
         const now = timestamp.now();
         try store.addLabel(issue_id, label_name, &now);
+        root.autoSync(allocator, db);
         try stdout.print("Added label '{s}' to {s}\n", .{ label_name, issue_id });
     } else if (std.mem.eql(u8, subcmd, "remove")) {
         const issue_id = res.positionals[1] orelse {
@@ -67,6 +68,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             return error.MissingArgument;
         };
         try store.removeLabel(issue_id, label_name);
+        root.autoSync(allocator, db);
         try stdout.print("Removed label '{s}' from {s}\n", .{ label_name, issue_id });
     } else {
         const stderr = std.fs.File.stderr().deprecatedWriter();

@@ -103,6 +103,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         .notes => update_args.notes = update_value,
     }
     try store.updateIssue(issue_id, update_args);
+    root.autoSync(allocator, db);
 
     const stdout = io.stdout();
     try stdout.print("Updated {s} on {s}\n", .{ field.label(), issue_id });

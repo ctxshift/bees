@@ -102,6 +102,8 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         .updated_at = timestamp.now(),
     });
 
+    root.autoSync(allocator, db);
+
     const stdout = io.stdout();
     if (res.args.json != 0) {
         var json_buf: [4096]u8 = undefined;

@@ -4,6 +4,7 @@ const connection = @import("db/connection.zig");
 const schema = @import("db/schema.zig");
 const store_mod = @import("db/store.zig");
 const config_mod = @import("export/config.zig");
+const jsonl = @import("export/jsonl.zig");
 const init_cmd = @import("cli/init.zig");
 const create_cmd = @import("cli/create.zig");
 const list_cmd = @import("cli/list.zig");
@@ -61,6 +62,18 @@ pub fn openDb(allocator: std.mem.Allocator) !sqlite.Database {
     }
 
     return db;
+}
+
+/// Auto-sync the database to issues.jsonl. Called by CLI mutation commands.
+pub fn autoSync(allocator: std.mem.Allocator, db: sqlite.Database) void {
+    const bees_path = findBeesDir(allocator) catch return;
+    defer allocator.free(bees_path);
+
+    var bees_dir = std.fs.openDirAbsolute(bees_path, .{}) catch return;
+    defer bees_dir.close();
+
+    var store = store_mod.Store.init(db);
+    jsonl.exportAll(&store, allocator, bees_dir) catch {};
 }
 
 pub fn findBeesDir(allocator: std.mem.Allocator) ![]const u8 {

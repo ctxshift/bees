@@ -86,6 +86,7 @@ fn runAdd(allocator: std.mem.Allocator, iter: anytype) !void {
 
     const now = timestamp.now();
     try store.addComment(issue_id, res.args.author, text, &now);
+    root.autoSync(allocator, db);
 
     const stdout = io.stdout();
     if (res.args.json != 0) {

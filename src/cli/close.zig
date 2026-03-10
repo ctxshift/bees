@@ -52,6 +52,8 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
     const now = timestamp.now();
     try store.closeIssue(issue_id, res.args.reason, &now);
 
+    root.autoSync(allocator, db);
+
     const stdout = std.fs.File.stdout().deprecatedWriter();
     if (res.args.json != 0) {
         var json_buf: [4096]u8 = undefined;

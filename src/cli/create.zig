@@ -98,6 +98,8 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         .defer_until = res.args.@"defer",
     });
 
+    root.autoSync(allocator, db);
+
     const out = io.stdout();
     if (res.args.json != 0) {
         var json_buf: [4096]u8 = undefined;

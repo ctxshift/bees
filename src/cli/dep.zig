@@ -58,6 +58,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
         const dep_type = res.args.type orelse "blocks";
         const now = timestamp.now();
         try store.addDep(issue_id, depends_on, dep_type, &now);
+        root.autoSync(allocator, db);
         try stdout.print("Added dependency: {s} depends on {s} ({s})\n", .{ issue_id, depends_on, dep_type });
     } else if (std.mem.eql(u8, subcmd, "remove")) {
         const issue_id = res.positionals[1] orelse {
@@ -71,6 +72,7 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             return error.MissingArgument;
         };
         try store.removeDep(issue_id, depends_on);
+        root.autoSync(allocator, db);
         try stdout.print("Removed dependency: {s} -> {s}\n", .{ issue_id, depends_on });
     } else if (std.mem.eql(u8, subcmd, "list")) {
         const issue_id = res.positionals[1] orelse {
