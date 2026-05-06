@@ -53,7 +53,7 @@ const dependencies_ddl =
     \\CREATE TABLE IF NOT EXISTS dependencies (
     \\    issue_id TEXT NOT NULL,
     \\    depends_on_id TEXT NOT NULL,
-    \\    dep_type TEXT NOT NULL DEFAULT 'blocks',
+    \\    type TEXT NOT NULL DEFAULT 'blocks',
     \\    created_at TEXT NOT NULL,
     \\    created_by TEXT,
     \\    PRIMARY KEY (issue_id, depends_on_id),
@@ -106,7 +106,7 @@ const ready_view =
     \\  AND i.id NOT IN (
     \\    SELECT d.issue_id FROM dependencies d
     \\    JOIN issues blocker ON d.depends_on_id = blocker.id
-    \\    WHERE d.dep_type = 'blocks'
+    \\    WHERE d.type = 'blocks'
     \\      AND blocker.status != 'closed'
     \\  );
 ;
@@ -116,11 +116,18 @@ const blocked_view =
     \\SELECT DISTINCT i.* FROM issues i
     \\JOIN dependencies d ON i.id = d.issue_id
     \\JOIN issues blocker ON d.depends_on_id = blocker.id
-    \\WHERE d.dep_type = 'blocks'
+    \\WHERE d.type = 'blocks'
     \\  AND blocker.status != 'closed';
 ;
 
 pub fn init(db: sqlite.Database) !void {
+    // Idempotent migration to align with Beads-compatible schema.
+    // Drop views first since they may reference dep_type and would block
+    // the column rename below; CREATE VIEW IF NOT EXISTS will recreate them.
+    db.exec("DROP VIEW IF EXISTS ready_issues", .{}) catch {};
+    db.exec("DROP VIEW IF EXISTS blocked_issues", .{}) catch {};
+    db.exec("ALTER TABLE dependencies RENAME COLUMN dep_type TO type", .{}) catch {};
+
     try db.exec(issues_ddl, .{});
     try db.exec(dependencies_ddl, .{});
     try db.exec(labels_ddl, .{});

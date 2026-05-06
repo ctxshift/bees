@@ -350,7 +350,7 @@ pub const Store = struct {
 
     pub fn addDep(self: *Store, issue_id: []const u8, depends_on: []const u8, dep_type: []const u8, created_at: []const u8) !void {
         try self.db.exec(
-            "INSERT OR IGNORE INTO dependencies (issue_id, depends_on_id, dep_type, created_at) VALUES (:issue_id, :depends_on_id, :dep_type, :created_at)",
+            "INSERT OR IGNORE INTO dependencies (issue_id, depends_on_id, type, created_at) VALUES (:issue_id, :depends_on_id, :dep_type, :created_at)",
             .{
                 .issue_id = sqlite.text(issue_id),
                 .depends_on_id = sqlite.text(depends_on),
@@ -380,7 +380,7 @@ pub const Store = struct {
         const stmt = try self.db.prepare(
             struct { issue_id: sqlite.Text },
             struct { depends_on_id: sqlite.Text, dep_type: sqlite.Text, created_at: sqlite.Text },
-            "SELECT depends_on_id, dep_type, created_at FROM dependencies WHERE issue_id = :issue_id",
+            "SELECT depends_on_id, type AS dep_type, created_at FROM dependencies WHERE issue_id = :issue_id",
         );
         defer stmt.finalize();
         stmt.bind(.{ .issue_id = sqlite.text(issue_id) }) catch return results.toOwnedSlice(allocator);
@@ -432,7 +432,7 @@ pub const Store = struct {
         const stmt = try self.db.prepare(
             struct { depends_on_id: sqlite.Text },
             struct { issue_id: sqlite.Text, dep_type: sqlite.Text, created_at: sqlite.Text },
-            "SELECT issue_id, dep_type, created_at FROM dependencies WHERE depends_on_id = :depends_on_id",
+            "SELECT issue_id, type AS dep_type, created_at FROM dependencies WHERE depends_on_id = :depends_on_id",
         );
         defer stmt.finalize();
         stmt.bind(.{ .depends_on_id = sqlite.text(issue_id) }) catch return results.toOwnedSlice(allocator);
@@ -584,7 +584,7 @@ pub const Store = struct {
         const stmt = try self.db.prepare(
             struct {},
             struct { issue_id: sqlite.Text, depends_on_id: sqlite.Text, dep_type: sqlite.Text },
-            "SELECT issue_id, depends_on_id, dep_type FROM dependencies",
+            "SELECT issue_id, depends_on_id, type AS dep_type FROM dependencies",
         );
         defer stmt.finalize();
 
