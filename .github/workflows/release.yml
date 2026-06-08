@@ -32,6 +32,8 @@ jobs:
             name: macos-x86_64
           - target: aarch64-macos-none
             name: macos-aarch64
+          - target: x86_64-windows-gnu
+            name: windows-x86_64
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
@@ -44,12 +46,19 @@ jobs:
       - name: Package
         run: |
           cd zig-out/bin
-          tar czf ../../bees-${{ matrix.name }}.tar.gz bees
+          case "${{ matrix.name }}" in
+            windows-*)
+              zip "../../bees-${{ matrix.name }}.zip" bees.exe
+              ;;
+            *)
+              tar czf "../../bees-${{ matrix.name }}.tar.gz" bees
+              ;;
+          esac
 
       - uses: actions/upload-artifact@v4
         with:
           name: bees-${{ matrix.name }}
-          path: bees-${{ matrix.name }}.tar.gz
+          path: bees-${{ matrix.name }}.*
 
   release:
     needs: build
@@ -63,4 +72,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes bees-*.tar.gz
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes bees-*.tar.gz bees-*.zip

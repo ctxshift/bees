@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const sqlite = @import("sqlite");
 const connection = @import("../db/connection.zig");
 const schema = @import("../db/schema.zig");
@@ -13,6 +14,10 @@ fn sigHandler(_: c_int) callconv(.c) void {
 }
 
 pub fn run(allocator: std.mem.Allocator, bees_dir_path: []const u8) !void {
+    // Unix domain sockets and POSIX signals are not available on Windows.
+    // The guard comptime-eliminates the POSIX-only body below on Windows.
+    if (builtin.os.tag == .windows) return error.DaemonNotSupported;
+
     // Open DB
     var db_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const db_path = std.fmt.bufPrintZ(&db_path_buf, "{s}/bees.db", .{bees_dir_path}) catch

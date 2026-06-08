@@ -1,9 +1,19 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const clap = @import("clap");
 const server = @import("../rpc/server.zig");
 const root = @import("../main.zig");
 
 pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
+    // The daemon relies on Unix domain sockets and POSIX signals, which are
+    // not available on Windows. Everything below this guard is comptime-
+    // eliminated on Windows, so the POSIX-only code never gets compiled there.
+    if (builtin.os.tag == .windows) {
+        const stderr = std.fs.File.stderr().deprecatedWriter();
+        try stderr.writeAll("Error: the bees daemon is not supported on Windows\n");
+        return error.DaemonNotSupported;
+    }
+
     const params = comptime clap.parseParamsComptime(
         \\-h, --help        Show help
         \\    --foreground   Run daemon in foreground (used internally)

@@ -23,6 +23,12 @@ Bees creates a `.bees/` directory in your project root containing a SQLite datab
 
 - [Zig](https://ziglang.org/) 0.15.0 or later
 
+## Install
+
+Prebuilt binaries for Linux, macOS, and Windows (x86_64) are attached to each
+[GitHub release](../../releases). Download the archive for your platform, extract
+it, and put `bees` (or `bees.exe` on Windows) somewhere on your `PATH`.
+
 ## Build
 
 ```sh
@@ -80,7 +86,7 @@ bees prime    # dumps open issues as markdown
 | `bees config get\|set <key> [value]` | Read/write config values |
 | `bees sync` | Export database to `issues.jsonl` |
 | `bees prime` | Dump open issues as AI-friendly markdown |
-| `bees daemon start\|stop\|status` | Manage the RPC daemon (Phase 3) |
+| `bees daemon start\|stop\|status` | Manage the RPC daemon (Phase 3, Unix only) |
 
 ## Priority levels
 
