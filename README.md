@@ -75,6 +75,7 @@ bees prime    # dumps open issues as markdown
 | Command | Description |
 |---------|-------------|
 | `bees init` | Initialize bees in the current directory |
+| `bees upgrade` | Migrate an existing `.bees` project to the current layout (idempotent, non-destructive) |
 | `bees create <title> [opts]` | Create an issue (`-t type`, `-p priority`, `-a assignee`, `-o owner`, `-d description`) |
 | `bees list [opts]` | List issues (`-s status`, `-p priority`, `-a assignee`, `--json`) |
 | `bees show <id>` | Show issue details (`--json`) |

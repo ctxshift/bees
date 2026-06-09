@@ -6,6 +6,7 @@ const store_mod = @import("db/store.zig");
 const config_mod = @import("export/config.zig");
 const jsonl = @import("export/jsonl.zig");
 const init_cmd = @import("cli/init.zig");
+const upgrade_cmd = @import("cli/upgrade.zig");
 const create_cmd = @import("cli/create.zig");
 const list_cmd = @import("cli/list.zig");
 const show_cmd = @import("cli/show.zig");
@@ -132,6 +133,8 @@ fn run() !void {
 
     if (std.mem.eql(u8, subcmd, "init")) {
         try init_cmd.run(allocator);
+    } else if (std.mem.eql(u8, subcmd, "upgrade")) {
+        try upgrade_cmd.run(allocator);
     } else if (std.mem.eql(u8, subcmd, "create")) {
         try create_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "list") or std.mem.eql(u8, subcmd, "ls")) {
@@ -178,6 +181,7 @@ fn printUsage() void {
         \\
         \\Commands:
         \\  init          Initialize bees in current directory
+        \\  upgrade       Migrate an existing .bees project to the current layout
         \\  create        Create a new issue
         \\  list (ls)     List issues
         \\  show          Show issue details

@@ -90,7 +90,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
     }
 }
 
-fn writeGitignore(dir: std.fs.Dir) !void {
+pub fn writeGitignore(dir: std.fs.Dir) !void {
     const content =
         \\# SQLite databases
         \\*.db
