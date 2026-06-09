@@ -9,7 +9,7 @@
 daemon.lock
 daemon.log
 daemon.pid
-bd.sock
+bees.sock
 last-touched
 
 # Lock files
