@@ -49,14 +49,14 @@ pub fn run(allocator: std.mem.Allocator, bees_dir_path: []const u8) !void {
 
     // Socket path
     var sock_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const sock_path = std.fmt.bufPrint(&sock_path_buf, "{s}/bd.sock", .{bees_dir_path}) catch
+    const sock_path = std.fmt.bufPrint(&sock_path_buf, "{s}/bees.sock", .{bees_dir_path}) catch
         return error.PathTooLong;
 
     // Remove old socket if exists
     std.fs.cwd().deleteFile(sock_path) catch {};
 
     // Bind Unix socket
-    const sock_path_z = std.fmt.bufPrintZ(&sock_path_buf, "{s}/bd.sock", .{bees_dir_path}) catch
+    const sock_path_z = std.fmt.bufPrintZ(&sock_path_buf, "{s}/bees.sock", .{bees_dir_path}) catch
         return error.PathTooLong;
     var addr = std.net.Address.initUnix(sock_path_z) catch return error.SocketPathTooLong;
     const server = try std.posix.socket(std.posix.AF.UNIX, std.posix.SOCK.STREAM | std.posix.SOCK.CLOEXEC | std.posix.SOCK.NONBLOCK, 0);

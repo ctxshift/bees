@@ -127,7 +127,7 @@ fn daemonStart(allocator: std.mem.Allocator, stdout: anytype) !void {
 
     // Wait for socket to appear (up to 3 seconds)
     var sock_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const sock_path = std.fmt.bufPrint(&sock_path_buf, "{s}/bd.sock", .{bees_path}) catch
+    const sock_path = std.fmt.bufPrint(&sock_path_buf, "{s}/bees.sock", .{bees_path}) catch
         return error.PathTooLong;
 
     var waited: u32 = 0;
@@ -175,7 +175,7 @@ fn daemonStop(stdout: anytype) !void {
         var waited: u32 = 0;
         while (waited < 20) : (waited += 1) {
             std.Thread.sleep(100 * std.time.ns_per_ms);
-            bees_dir.access("bd.sock", .{}) catch {
+            bees_dir.access("bees.sock", .{}) catch {
                 try stdout.writeAll("Daemon stopped\n");
                 return;
             };
@@ -185,7 +185,7 @@ fn daemonStop(stdout: anytype) !void {
         try stdout.print("Process {d} not found (may have already exited)\n", .{pid});
         // Clean up stale files
         bees_dir.deleteFile("daemon.pid") catch {};
-        bees_dir.deleteFile("bd.sock") catch {};
+        bees_dir.deleteFile("bees.sock") catch {};
     }
 }
 
@@ -197,7 +197,7 @@ fn daemonStatus(stdout: anytype) !void {
     defer bees_dir.close();
 
     // Check socket
-    bees_dir.access("bd.sock", .{}) catch {
+    bees_dir.access("bees.sock", .{}) catch {
         try stdout.writeAll("Daemon: not running\n");
         return;
     };
@@ -231,7 +231,7 @@ fn daemonStatus(stdout: anytype) !void {
 fn isDaemonRunning(bees_path: []const u8) bool {
     // Check socket + PID alive
     var sock_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const sock_path = std.fmt.bufPrint(&sock_buf, "{s}/bd.sock", .{bees_path}) catch return false;
+    const sock_path = std.fmt.bufPrint(&sock_buf, "{s}/bees.sock", .{bees_path}) catch return false;
     std.fs.cwd().access(sock_path, .{}) catch return false;
 
     var pid_buf: [std.fs.max_path_bytes]u8 = undefined;
