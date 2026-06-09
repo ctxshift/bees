@@ -5,7 +5,6 @@ const store_mod = @import("../db/store.zig");
 const metadata_mod = @import("../export/metadata.zig");
 const config_mod = @import("../export/config.zig");
 const jsonl_import = @import("../export/jsonl_import.zig");
-const symlink = @import("../symlink.zig");
 
 pub fn run(allocator: std.mem.Allocator) !void {
     const cwd = std.fs.cwd();
@@ -79,14 +78,6 @@ pub fn run(allocator: std.mem.Allocator) !void {
     // Import from existing issues.jsonl if present
     const imported = try jsonl_import.importAll(&store, allocator, bees_dir);
 
-    // Create .beads symlink
-    symlink.ensureBeadsSymlinkAtPath(".") catch {};
-
-    // Create beads.db -> bees.db symlink (for vscode-beads extension compatibility)
-    bees_dir.symLink("bees.db", "beads.db", .{}) catch |err| {
-        if (err != error.PathAlreadyExists) return err;
-    };
-
     // Create issues.jsonl if it doesn't exist yet
     if (bees_dir.createFile("issues.jsonl", .{ .exclusive = true })) |jsonl_file| {
         jsonl_file.close();
@@ -112,7 +103,7 @@ fn writeGitignore(dir: std.fs.Dir) !void {
         \\daemon.lock
         \\daemon.log
         \\daemon.pid
-        \\bd.sock
+        \\bees.sock
         \\last-touched
         \\
         \\# Lock files
