@@ -6,7 +6,7 @@
 
 A lightweight, local issue tracker backed by SQLite. Single binary, no dependencies, designed to live inside your project directory.
 
-Bees creates a `.bees/` directory in your project root containing a SQLite database and JSONL export. It's compatible with the [vscode-beads](https://marketplace.visualstudio.com/items?itemName=planet57.vscode-beads) extension via a `.beads` symlink, giving you a kanban board and issue panel in VS Code.
+Bees creates a `.bees/` directory in your project root containing a SQLite database and JSONL export. The [vscode-bees](https://github.com/ctxshift/vscode-bees) extension drives the `bees` CLI directly to give you a kanban board and issue panel in VS Code on Linux, macOS, and Windows.
 
 ## Features
 
@@ -17,7 +17,7 @@ Bees creates a `.bees/` directory in your project root containing a SQLite datab
 - **JSON output** -- every command supports `--json` for scripting
 - **Dependency tracking** -- block/related/parent-child relationships with ready-issue filtering
 - **Labels and comments** -- lightweight metadata on issues
-- **VS Code compatible** -- `.beads/` symlink lets the vscode-beads extension connect
+- **VS Code extension** -- [vscode-bees](https://github.com/ctxshift/vscode-bees) drives the CLI for a kanban board and issue panel
 
 ## Requirements
 
@@ -113,7 +113,6 @@ my-project/
     metadata.json    # Extension metadata
     config.json      # Project config
     .gitignore       # Ignores db, socket, pid files
-  .beads -> .bees    # Symlink for vscode-beads compatibility
 ```
 
 The `.bees/` directory is self-contained. Commit `issues.jsonl`, `metadata.json`, `config.json`, and `.gitignore` to share issue state. The database and runtime files are git-ignored.
