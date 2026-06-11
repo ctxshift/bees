@@ -871,7 +871,7 @@ pub const CommentResult = struct {
     text: []const u8,
     created_at: []const u8,
 
-    pub fn deinit(self: *CommentResult, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *const CommentResult, allocator: std.mem.Allocator) void {
         if (self.author) |a| allocator.free(a);
         allocator.free(self.text);
         allocator.free(self.created_at);

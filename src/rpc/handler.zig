@@ -4,6 +4,7 @@ const protocol = @import("protocol.zig");
 const mutations = @import("mutations.zig");
 const timestamp = @import("../timestamp.zig");
 const jsonl = @import("../export/jsonl.zig");
+const root = @import("../main.zig");
 
 const Store = store_mod.Store;
 const Request = protocol.Request;
@@ -81,7 +82,7 @@ const Op = enum {
 };
 
 fn handlePing(allocator: std.mem.Allocator) ![]const u8 {
-    return try std.fmt.allocPrint(allocator, "{{\"message\":\"pong\",\"version\":\"0.1.0\"}}", .{});
+    return try std.fmt.allocPrint(allocator, "{{\"message\":\"pong\",\"version\":\"{s}\"}}", .{root.version});
 }
 
 fn handleHealth(allocator: std.mem.Allocator, store: *Store) ![]const u8 {

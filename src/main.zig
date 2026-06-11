@@ -1,11 +1,15 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const sqlite = @import("sqlite");
 const connection = @import("db/connection.zig");
 const schema = @import("db/schema.zig");
 const store_mod = @import("db/store.zig");
 const config_mod = @import("export/config.zig");
 const jsonl = @import("export/jsonl.zig");
+const jsonl_import = @import("export/jsonl_import.zig");
 const init_cmd = @import("cli/init.zig");
+const import_cmd = @import("cli/import.zig");
+const rename_prefix_cmd = @import("cli/rename_prefix.zig");
 const upgrade_cmd = @import("cli/upgrade.zig");
 const create_cmd = @import("cli/create.zig");
 const list_cmd = @import("cli/list.zig");
@@ -22,6 +26,9 @@ const comment_cmd = @import("cli/comment_cmd.zig");
 const edit_cmd = @import("cli/edit.zig");
 const daemon_cmd = @import("cli/daemon_cmd.zig");
 
+/// CLI version. Keep in sync with build.zig.zon.
+pub const version = "0.4.0";
+
 pub fn openDb(allocator: std.mem.Allocator) !sqlite.Database {
     // Find .bees directory
     const bees_path = findBeesDir(allocator) catch |err| {
@@ -35,6 +42,12 @@ pub fn openDb(allocator: std.mem.Allocator) !sqlite.Database {
     const db_path = std.fmt.bufPrintZ(&path_buf, "{s}/bees.db", .{bees_path}) catch {
         return error.PathTooLong;
     };
+
+    // Was the db already present? If not, connection.open is about to create an
+    // empty one — we hydrate it from issues.jsonl below instead of silently
+    // reporting "no issues" (and risking a later sync overwriting the good
+    // committed JSONL with an empty export).
+    const db_existed = if (std.fs.accessAbsolute(db_path, .{})) |_| true else |_| false;
 
     const db = try connection.open(db_path);
     errdefer db.close();
@@ -58,6 +71,20 @@ pub fn openDb(allocator: std.mem.Allocator) !sqlite.Database {
             defer @constCast(&config).deinit(allocator);
             if (config.issue_prefix) |prefix| {
                 store.setConfig("issue_prefix", prefix) catch {};
+            }
+        }
+    }
+
+    // Rebuild from JSONL when the db was missing, so a fresh clone (db is
+    // gitignored) hydrates from the committed issues.jsonl automatically.
+    if (!db_existed) {
+        var bees_dir = std.fs.openDirAbsolute(bees_path, .{}) catch null;
+        if (bees_dir) |*dir| {
+            defer dir.close();
+            const imported = jsonl_import.importAll(&store, allocator, dir.*) catch 0;
+            if (imported > 0) {
+                const stderr = std.fs.File.stderr().deprecatedWriter();
+                stderr.print("Rebuilt database from issues.jsonl ({d} issues).\n", .{imported}) catch {};
             }
         }
     }
@@ -101,10 +128,20 @@ pub fn findBeesDir(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 pub fn main() void {
+    // Windows consoles default to a legacy OEM code page, which renders the
+    // UTF-8 emoji/bullet glyphs in our output as mojibake (e.g. "≡ƒôï").
+    // Switch console output to UTF-8 (code page 65001).
+    if (builtin.os.tag == .windows) {
+        _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
+    }
+
     run() catch |err| {
         switch (err) {
+            // Reader closed the pipe early (e.g. `bees ready | head`). Not an
+            // error — exit cleanly like other Unix tools do on EPIPE.
+            error.BrokenPipe => std.process.exit(0),
             // User-facing errors that already printed a message
-            error.NotFound, error.MissingArgument => std.process.exit(1),
+            error.NotFound, error.MissingArgument, error.NotInitialized, error.DuplicateId, error.InvalidJsonl => std.process.exit(1),
             else => {
                 const stderr = std.fs.File.stderr().deprecatedWriter();
                 stderr.print("Error: {s}\n", .{@errorName(err)}) catch {};
@@ -132,7 +169,9 @@ fn run() !void {
     };
 
     if (std.mem.eql(u8, subcmd, "init")) {
-        try init_cmd.run(allocator);
+        try init_cmd.run(allocator, &iter);
+    } else if (std.mem.eql(u8, subcmd, "import")) {
+        try import_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "upgrade")) {
         try upgrade_cmd.run(allocator);
     } else if (std.mem.eql(u8, subcmd, "create")) {
@@ -157,12 +196,17 @@ fn run() !void {
         try edit_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "config")) {
         try config_cmd.run(allocator, &iter);
+    } else if (std.mem.eql(u8, subcmd, "rename-prefix")) {
+        try rename_prefix_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "sync")) {
         try sync_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "prime")) {
         try prime_cmd.run(allocator, &iter);
     } else if (std.mem.eql(u8, subcmd, "daemon")) {
         try daemon_cmd.run(allocator, &iter);
+    } else if (std.mem.eql(u8, subcmd, "version") or std.mem.eql(u8, subcmd, "--version") or std.mem.eql(u8, subcmd, "-v")) {
+        const stdout = std.fs.File.stdout().deprecatedWriter();
+        try stdout.print("bees {s}\n", .{version});
     } else if (std.mem.eql(u8, subcmd, "--help") or std.mem.eql(u8, subcmd, "-h")) {
         printUsage();
     } else {
@@ -193,9 +237,12 @@ fn printUsage() void {
         \\  dep           Manage dependencies
         \\  label         Manage labels
         \\  config        Get/set configuration
+        \\  rename-prefix Rename the issue prefix across all issues
         \\  sync          Export database to JSONL
+        \\  import        Rebuild database from JSONL
         \\  prime         Dump issues as AI context
         \\  daemon        Manage daemon (start/stop/status)
+        \\  version       Print the bees version
         \\
         \\Run 'bees <command> --help' for command-specific help.
         \\

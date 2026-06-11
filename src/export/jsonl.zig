@@ -39,11 +39,17 @@ pub fn exportAll(store: *Store, allocator: std.mem.Allocator, dir: std.fs.Dir) !
             allocator.free(deps);
         }
 
+        const comments = store.listComments(allocator, issue.id) catch &[_]store_mod.CommentResult{};
+        defer {
+            for (comments) |*c| c.deinit(allocator);
+            allocator.free(comments);
+        }
+
         // Write hydrated JSON line
         var json_buf: [8192]u8 = undefined;
         var json_w = io.JsonWriter.init(writer, &json_buf);
         var jw = json_w.stringify();
-        try writeHydratedIssue(&jw, issue, labels, deps);
+        try writeHydratedIssue(&jw, issue, labels, deps, comments);
         try jw.writer.writeByte('\n');
         try jw.writer.flush();
     }
@@ -54,7 +60,7 @@ pub fn exportAll(store: *Store, allocator: std.mem.Allocator, dir: std.fs.Dir) !
     try dir.rename(tmp_name, final_name);
 }
 
-fn writeHydratedIssue(jw: *std.json.Stringify, issue: *const IssueResult, labels: []const []const u8, deps: []const store_mod.DepResult) !void {
+fn writeHydratedIssue(jw: *std.json.Stringify, issue: *const IssueResult, labels: []const []const u8, deps: []const store_mod.DepResult, comments: []const store_mod.CommentResult) !void {
     try jw.beginObject();
 
     try jw.objectField("id");
@@ -123,6 +129,22 @@ fn writeHydratedIssue(jw: *std.json.Stringify, issue: *const IssueResult, labels
         try jw.objectField("notes");
         try jw.write(v);
     }
+    if (issue.pinned != 0) {
+        try jw.objectField("pinned");
+        try jw.write(true);
+    }
+    if (issue.is_template != 0) {
+        try jw.objectField("is_template");
+        try jw.write(true);
+    }
+    if (issue.ephemeral != 0) {
+        try jw.objectField("ephemeral");
+        try jw.write(true);
+    }
+    if (issue.metadata) |v| {
+        try jw.objectField("metadata");
+        try jw.write(v);
+    }
 
     // Embed labels as array
     if (labels.len > 0) {
@@ -148,6 +170,25 @@ fn writeHydratedIssue(jw: *std.json.Stringify, issue: *const IssueResult, labels
             try jw.write(dep.dep_type);
             try jw.objectField("created_at");
             try jw.write(dep.created_at);
+            try jw.endObject();
+        }
+        try jw.endArray();
+    }
+
+    // Embed comments as array of objects
+    if (comments.len > 0) {
+        try jw.objectField("comments");
+        try jw.beginArray();
+        for (comments) |comment| {
+            try jw.beginObject();
+            if (comment.author) |author| {
+                try jw.objectField("author");
+                try jw.write(author);
+            }
+            try jw.objectField("text");
+            try jw.write(comment.text);
+            try jw.objectField("created_at");
+            try jw.write(comment.created_at);
             try jw.endObject();
         }
         try jw.endArray();

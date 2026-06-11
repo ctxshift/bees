@@ -5,8 +5,26 @@ const store_mod = @import("../db/store.zig");
 const metadata_mod = @import("../export/metadata.zig");
 const config_mod = @import("../export/config.zig");
 const jsonl_import = @import("../export/jsonl_import.zig");
+const root = @import("../main.zig");
 
-pub fn run(allocator: std.mem.Allocator) !void {
+pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
+    // `bees init --help` must print help, not run init (which on an existing
+    // project would error out mid-rebuild).
+    while (iter.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
+            const stderr = std.fs.File.stderr().deprecatedWriter();
+            try stderr.writeAll(
+                \\Usage: bees init
+                \\
+                \\Initialize bees in the current directory (creates .bees/).
+                \\Rebuilds the database from issues.jsonl if one is present, and
+                \\preserves an existing .bees/config.json.
+                \\
+            );
+            return;
+        }
+    }
+
     const cwd = std.fs.cwd();
     const stdout = std.fs.File.stdout().deprecatedWriter();
 
@@ -40,8 +58,12 @@ pub fn run(allocator: std.mem.Allocator) !void {
     // Write metadata.json
     try metadata_mod.write(bees_dir);
 
-    // Write config.json
-    try config_mod.write(bees_dir, .{ .issue_prefix = prefix });
+    // Write config.json only if absent — never clobber a user's existing
+    // config (the prefix above was already read from it when present).
+    const config_exists = if (bees_dir.access("config.json", .{})) |_| true else |_| false;
+    if (!config_exists) {
+        try config_mod.write(bees_dir, .{ .issue_prefix = prefix });
+    }
 
     // Write .gitignore
     try writeGitignore(bees_dir);
@@ -73,7 +95,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
     var store = store_mod.Store.init(db);
     try store.setConfig("issue_prefix", prefix);
     try store.setConfig("next_issue_number", "1");
-    try store.setConfig("bd_version", "0.1.0");
+    try store.setConfig("bees_version", root.version);
 
     // Import from existing issues.jsonl if present
     const imported = try jsonl_import.importAll(&store, allocator, bees_dir);

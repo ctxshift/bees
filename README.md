@@ -86,7 +86,10 @@ bees prime    # dumps open issues as markdown
 | `bees label add\|remove <id> <label>` | Manage labels |
 | `bees config get\|set <key> [value]` | Read/write config values |
 | `bees sync` | Export database to `issues.jsonl` |
+| `bees import` | Rebuild the database from `issues.jsonl` |
+| `bees rename-prefix <new> [--dry-run]` | Rename the issue prefix across all issues and references |
 | `bees prime` | Dump open issues as AI-friendly markdown |
+| `bees version` | Print the bees version (also `--version`, `-v`) |
 | `bees daemon start\|stop\|status` | Manage the RPC daemon (Phase 3, Unix only) |
 
 ## Priority levels
@@ -117,6 +120,16 @@ my-project/
 ```
 
 The `.bees/` directory is self-contained. Commit `issues.jsonl`, `metadata.json`, `config.json`, and `.gitignore` to share issue state. The database and runtime files are git-ignored.
+
+## Syncing the database and JSONL
+
+`issues.jsonl` is the committed source of truth; `bees.db` is a git-ignored, rebuildable cache.
+
+- `bees sync` exports the database to `issues.jsonl` (run it before committing).
+- `bees import` rebuilds the database from `issues.jsonl`, dropping and re-creating `bees.db`. The export/import round-trips the full graph, including dependencies and comments on closed issues.
+- Running any command with the database missing (e.g. a fresh clone) auto-rebuilds it from `issues.jsonl`, so you rarely call `import` by hand.
+
+**Windows:** the RPC daemon and its file-watcher auto-sync are Unix-only. On Windows there is no background sync, so the workflow is explicit: `bees sync` after making changes (to update the committed JSONL) and `bees import` after pulling (to refresh the local database).
 
 ## Tests
 

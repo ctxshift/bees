@@ -1,6 +1,7 @@
 const std = @import("std");
 const clap = @import("clap");
 const store_mod = @import("../db/store.zig");
+const config_mod = @import("../export/config.zig");
 const root = @import("../main.zig");
 
 pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
@@ -66,6 +67,20 @@ pub fn run(allocator: std.mem.Allocator, iter: anytype) !void {
             return error.MissingArgument;
         };
         try store.setConfig(key, value);
+
+        // issue_prefix lives in both the db and the committed config.json.
+        // Write through so the two never drift (a stale config.json is what let
+        // `bees init` reset the prefix on rebuild).
+        if (std.mem.eql(u8, key, "issue_prefix")) {
+            if (root.findBeesDir(allocator)) |bees_path| {
+                defer allocator.free(bees_path);
+                if (std.fs.openDirAbsolute(bees_path, .{})) |*dir| {
+                    defer @constCast(dir).close();
+                    config_mod.write(dir.*, .{ .issue_prefix = value }) catch {};
+                } else |_| {}
+            } else |_| {}
+        }
+
         try stdout.print("{s} = {s}\n", .{ key, value });
     } else {
         const stderr = std.fs.File.stderr().deprecatedWriter();
